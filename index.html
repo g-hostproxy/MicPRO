@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MicPRO — studio-clean voice from the mic you already own</title>
+  <meta name="description" content="MicPRO is a free desktop app that cleans up your microphone in real time: denoise, gate, EQ, de-esser, compressor and limiter, with presets for the Shure SM7B and Logitech G Pro X." />
+  <meta property="og:title" content="MicPRO" />
+  <meta property="og:description" content="Studio-clean voice for streams, comms and raid edits. Free for Windows, macOS and Linux." />
+  <meta property="og:image" content="assets/app-screenshot.jpg" />
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" />
+  <style>
+    :root {
+      --bg: #171a13; --panel: #20241a; --panel-2: #292e22; --face: #2f3427; --line: #3b412f;
+      --bone: #ebe6d6; --muted: #a3a18e; --dim: #77766a; --amber: #ffb23e; --amber-deep: #c9781a; --green: #a5e35c; --red: #ff5e46;
+      --display: 'Chakra Petch', 'Bahnschrift', 'Segoe UI', sans-serif;
+      --ui: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--bone); font: 17px/1.6 var(--ui); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    img { max-width: 100%; display: block; }
+    :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+    .wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+
+    /* nav */
+    nav { position: sticky; top: 0; z-index: 10; background: rgba(23, 26, 19, 0.86); backdrop-filter: blur(10px); border-bottom: 1px solid #262a20; }
+    nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 700 21px/1 var(--display); }
+    .logo img { width: 30px; height: 30px; border-radius: 7px; }
+    nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 15px; }
+    nav .links a { text-decoration: none; color: var(--muted); }
+    nav .links a:hover { color: var(--bone); }
+    .btn { display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 22px; border-radius: 10px; font: 600 16px/1 var(--display); text-decoration: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--bone); letter-spacing: 0.01em; }
+    .btn:hover { border-color: var(--muted); }
+    .btn-primary { background: var(--amber); color: #231603; border-color: var(--amber); box-shadow: 0 0 0 0 rgba(255, 178, 62, 0.4); }
+    .btn-primary:hover { border-color: #ffd08a; background: #ffc061; }
+    .btn svg { width: 18px; height: 18px; }
+    nav .btn { height: 38px; padding: 0 16px; font-size: 14px; }
+
+    /* hero */
+    .hero { padding: 72px 0 40px; display: grid; grid-template-columns: 1.02fr 1fr; gap: 56px; align-items: center; }
+    h1 { font: 700 clamp(42px, 5.4vw, 70px)/1.02 var(--display); margin: 0 0 22px; letter-spacing: -0.01em; }
+    .lede { color: var(--muted); font-size: 19.5px; max-width: 34em; margin: 0 0 30px; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .alt-dl { margin-top: 14px; font-size: 14.5px; color: var(--dim); }
+    .alt-dl a { color: var(--muted); }
+
+    /* before / after scope — the one loud thing on the page */
+    .scope {
+      position: relative; border-radius: 16px; border: 1px solid var(--line); overflow: hidden;
+      background: #10120c; aspect-ratio: 5 / 4; touch-action: none; cursor: ew-resize;
+      box-shadow: 0 40px 90px rgba(0, 0, 0, 0.45);
+    }
+    .scope canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .scope .tag { position: absolute; top: 16px; font: 600 14px/1 var(--display); padding: 8px 12px; border-radius: 8px; pointer-events: none; }
+    .scope .tag-raw { left: 16px; background: rgba(41, 46, 34, 0.9); color: var(--muted); }
+    .scope .tag-pro { right: 16px; background: var(--amber); color: #231603; }
+    .scope .handle { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--bone); transform: translateX(-1px); pointer-events: none; }
+    .scope .handle::after {
+      content: ''; position: absolute; top: 50%; left: 50%; width: 38px; height: 38px; transform: translate(-50%, -50%);
+      border-radius: 50%; background: var(--bone) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 7l-5 5 5 5M15 7l5 5-5 5' fill='none' stroke='%23171a13' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 22px no-repeat;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    }
+    .scope .readouts { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; justify-content: space-between; font-size: 13.5px; color: var(--muted); pointer-events: none; }
+    .scope .readouts b { color: var(--bone); font: 600 15px/1 var(--display); }
+    .scope-note { color: var(--dim); font-size: 14px; margin: 12px 2px 0; }
+
+    section { padding: 84px 0; }
+    h2 { font: 700 clamp(30px, 3.4vw, 44px)/1.08 var(--display); margin: 0 0 16px; }
+    .section-lede { color: var(--muted); max-width: 40em; margin: 0 0 40px; font-size: 18.5px; }
+
+    .shot { border-radius: 14px; border: 1px solid var(--line); overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+    .shot-caption { color: var(--dim); font-size: 14.5px; margin-top: 14px; }
+
+    /* chain: a real sequence, so it is numbered */
+    .chain { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; counter-reset: s; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .chain li { counter-increment: s; padding: 22px 18px 24px; background: var(--panel); border-right: 1px solid var(--line); position: relative; }
+    .chain li:last-child { border-right: 0; }
+    .chain li::before { content: counter(s); display: block; font: 600 13px/1 var(--display); color: var(--amber); margin-bottom: 14px; }
+    .chain li::after { content: ''; position: absolute; top: 24px; right: -6px; width: 10px; height: 10px; background: var(--panel); border-top: 1px solid var(--line); border-right: 1px solid var(--line); transform: rotate(45deg); z-index: 1; }
+    .chain li:last-child::after { display: none; }
+    .chain h3 { margin: 0 0 6px; font: 700 17px/1.2 var(--display); }
+    .chain p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+
+    /* presets */
+    .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .preset { background: var(--face); border: 1px solid var(--line); border-radius: 8px; padding: 30px 30px 26px; position: relative; }
+    .preset::before, .preset::after { content: ''; position: absolute; top: 12px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #8d8c7a, #3d3f33 70%); }
+    .preset::before { left: 12px; } .preset::after { right: 12px; }
+    .preset h3 { font: 700 26px/1.1 var(--display); margin: 0 0 4px; }
+    .preset .kind { color: var(--amber); font-size: 15px; margin: 0 0 14px; }
+    .preset p { color: var(--muted); margin: 0 0 18px; }
+    .preset dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0; font-size: 15px; border-top: 1px solid var(--line); padding-top: 16px; }
+    .preset dt { color: var(--dim); }
+    .preset dd { margin: 0; }
+    .more-presets { color: var(--muted); margin-top: 22px; font-size: 16px; }
+
+    /* setup */
+    .setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; counter-reset: st; list-style: none; padding: 0; margin: 0; }
+    .setup li { counter-increment: st; border-top: 2px solid var(--line); padding-top: 18px; }
+    .setup li::before { content: counter(st); font: 700 34px/1 var(--display); color: var(--amber); display: block; margin-bottom: 12px; }
+    .setup h3 { font: 700 20px/1.2 var(--display); margin: 0 0 8px; }
+    .setup p { margin: 0; color: var(--muted); }
+    code { font-size: 0.9em; background: var(--panel-2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; color: var(--bone); }
+
+    /* faq */
+    .faq details { max-width: 820px; }
+    details { border-bottom: 1px solid var(--line); padding: 18px 0; }
+    summary { cursor: pointer; font: 600 19px/1.3 var(--display); list-style: none; display: flex; justify-content: space-between; gap: 20px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: '+'; color: var(--amber); font-size: 24px; line-height: 1; }
+    details[open] summary::after { content: '–'; }
+    details p { color: var(--muted); margin: 12px 0 2px; }
+
+    .download { background: var(--panel); border-top: 1px solid #262a20; border-bottom: 1px solid #262a20; }
+    .dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .dl { display: flex; flex-direction: column; gap: 6px; padding: 24px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); text-decoration: none; }
+    .dl:hover { border-color: var(--amber-deep); }
+    .dl.rec { border-color: var(--amber); }
+    .dl b { font: 700 21px/1.2 var(--display); }
+    .dl span { color: var(--muted); font-size: 15px; }
+    .dl em { font-style: normal; color: var(--amber); font: 600 15px/1 var(--display); margin-top: 10px; }
+
+    footer { padding: 40px 0 60px; color: var(--dim); font-size: 14.5px; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; padding-top: 44px; }
+      .chain { grid-template-columns: 1fr 1fr; }
+      .chain li { border-bottom: 1px solid var(--line); }
+      .chain li::after { display: none; }
+      .presets, .setup, .dl-grid { grid-template-columns: 1fr; }
+      nav .links { display: none; }
+      nav .btn { margin-left: auto; }
+    }
+    @media (max-width: 560px) { .chain { grid-template-columns: 1fr; } section { padding: 60px 0; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="logo" href="#"><img src="assets/icon.png" alt="" />MicPRO</a>
+      <div class="links">
+        <a href="#how">How it works</a>
+        <a href="#presets">Presets</a>
+        <a href="#setup">Setup</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/g-hostproxy/MicPRO">GitHub</a>
+      </div>
+      <a class="btn btn-primary" href="#download">Download</a>
+    </div>
+  </nav>
+
+  <header class="wrap hero">
+    <div>
+      <h1>Make the mic you own sound like a studio.</h1>
+      <p class="lede">MicPRO cleans your voice in real time before it reaches OBS, Discord or the game. Fans and keyboard noise drop out, harsh "s" sounds soften, and every callout lands at the same level. Tuned presets for the Shure SM7B and Logitech G Pro X are built in.</p>
+      <div class="cta">
+        <a class="btn btn-primary" id="hero-dl" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-Setup.exe">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Download for Windows</span>
+        </a>
+        <a class="btn" href="#how">See what it does</a>
+      </div>
+      <p class="alt-dl">Free and open source. Also on <a href="#download">macOS and Linux</a>. Everything runs on your PC; no account, no cloud.</p>
+    </div>
+    <div>
+      <div class="scope" id="scope" role="slider" tabindex="0" aria-label="Compare raw mic and MicPRO" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+        <canvas id="scope-canvas"></canvas>
+        <span class="tag tag-raw">Raw headset mic</span>
+        <span class="tag tag-pro">With MicPRO</span>
+        <div class="handle" id="scope-handle"></div>
+        <div class="readouts"><span>Noise floor <b>−42 dB</b></span><span>Noise floor <b>−78 dB</b></span></div>
+      </div>
+      <p class="scope-note">Drag across the waveform to compare the same take before and after processing.</p>
+    </div>
+  </header>
+
+  <section class="wrap" id="app">
+    <div class="shot"><img src="assets/app-screenshot.jpg" alt="The MicPRO app: a live spectrum of the mic, level meters, and rack-style modules for denoise, gate, EQ, de-esser, warmth, compressor and output." width="1440" height="900" loading="lazy" /></div>
+    <p class="shot-caption">The whole chain on one screen: live spectrum, meters, and a rack you can tweak while you talk.</p>
+  </section>
+
+  <section class="wrap" id="how">
+    <h2>Seven stages, in the order a broadcast engineer would use them.</h2>
+    <p class="section-lede">Each stage fixes one problem and hands a cleaner signal to the next. Turn any of them off, or let a preset set them for you.</p>
+    <ol class="chain">
+      <li><h3>Denoise</h3><p>Learns the hum of your PC and room and pulls it out from under your voice.</p></li>
+      <li><h3>Gate</h3><p>Closes smoothly between sentences so keyboard clatter and breathing stay out.</p></li>
+      <li><h3>Tone EQ</h3><p>Cuts mud and boom, adds chest and clarity. Drag the curve to taste.</p></li>
+      <li><h3>De-esser</h3><p>Softens sharp "s" and "t" sounds without dulling the rest of your voice.</p></li>
+      <li><h3>Warmth</h3><p>Blends in gentle analog-style saturation for a fuller, richer tone.</p></li>
+      <li><h3>Compressor</h3><p>Evens out whispers and shouting so every callout sits at one level.</p></li>
+      <li><h3>Limiter</h3><p>A hard ceiling. When a firefight makes you yell, nothing clips.</p></li>
+    </ol>
+  </section>
+
+  <section class="wrap" id="presets">
+    <h2>Presets tuned for real mics.</h2>
+    <p class="section-lede">Pick your mic and you're most of the way there. Every preset is a starting point you can adjust and save as your own.</p>
+    <div class="presets">
+      <article class="preset">
+        <h3>Shure SM7B</h3>
+        <p class="kind">Broadcast dynamic</p>
+        <p>The SM7B is warm and quiet but dark, and it needs a lot of gain. This preset brings back the top end, controls proximity boom when you lean in, and adds level.</p>
+        <dl>
+          <dt>Low cut</dt><dd>75 Hz, steep</dd>
+          <dt>EQ</dt><dd>−3 dB boxiness at 300 Hz, +3.5 dB presence at 4.2 kHz, +4 dB air above 11 kHz</dd>
+          <dt>Dynamics</dt><dd>3.5:1 compression, light gate, −1 dB limiter</dd>
+          <dt>Denoise</dt><dd>Light: the mic already rejects the room</dd>
+        </dl>
+      </article>
+      <article class="preset">
+        <h3>Logitech G Pro X</h3>
+        <p class="kind">Headset rescue</p>
+        <p>Headset boom mics sound thin, nasal and hissy. This preset denoises harder, gates tighter, puts body back under your voice and scoops out the honk.</p>
+        <dl>
+          <dt>Low cut</dt><dd>100 Hz</dd>
+          <dt>EQ</dt><dd>+4 dB body at 160 Hz, −3 dB nasal at 900 Hz, high cut at 14 kHz for hiss</dd>
+          <dt>Dynamics</dt><dd>4:1 compression, tight gate, −1 dB limiter</dd>
+          <dt>Denoise</dt><dd>Strong, plus voice isolation</dd>
+        </dl>
+      </article>
+    </div>
+    <p class="more-presets">Also included: Clean Streamer for any mic, Movie Voiceover for raid-edit narration, and Squad Radio for crunchy comms callouts in your videos.</p>
+  </section>
+
+  <section class="wrap" id="setup">
+    <h2>Set up in three steps.</h2>
+    <p class="section-lede">MicPRO sends its clean audio to a virtual cable. Your apps listen to that cable instead of the raw mic.</p>
+    <ol class="setup">
+      <li><h3>Install MicPRO and VB-CABLE</h3><p>Grab MicPRO below and the free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> driver. Restart your PC once.</p></li>
+      <li><h3>Route it</h3><p>In MicPRO, send clean audio to <code>CABLE Input</code>. In OBS, Discord or Tarkov, choose <code>CABLE Output</code> as your microphone.</p></li>
+      <li><h3>Pick a preset and record</h3><p>Choose your mic, press Auto-set gain and talk for five seconds. Record a test take to hear raw and processed back to back.</p></li>
+    </ol>
+  </section>
+
+  <section class="download" id="download">
+    <div class="wrap">
+      <h2>Download MicPRO</h2>
+      <p class="section-lede">Version 1.0. Free and open source under the MIT license.</p>
+      <div class="dl-grid">
+        <a class="dl" data-os="win" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-Setup.exe"><b>Windows</b><span>Windows 10 and 11, 64-bit installer</span><em>MicPRO-Setup.exe</em></a>
+        <a class="dl" data-os="mac" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-mac.dmg"><b>macOS</b><span>Apple silicon and Intel</span><em>MicPRO-mac.dmg</em></a>
+        <a class="dl" data-os="linux" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-linux.AppImage"><b>Linux</b><span>AppImage, most distributions</span><em>MicPRO-linux.AppImage</em></a>
+      </div>
+      <p class="alt-dl">Windows may show a SmartScreen notice because the installer isn't code-signed yet. Choose More info, then Run anyway. All builds are on the <a href="https://github.com/g-hostproxy/MicPRO/releases">releases page</a>.</p>
+    </div>
+  </section>
+
+  <section class="wrap faq" id="faq">
+    <h2>Questions</h2>
+    <details><summary>Does it add delay to my voice?</summary><p>About 20 ms end to end, which nobody on comms will notice. In OBS you can set a small sync offset on your webcam if you want lips perfectly matched.</p></details>
+    <details><summary>Can it really fix a headset mic?</summary><p>It can't turn a headset into an SM7B, but it removes the things that make headset mics sound cheap: hiss, room noise, a thin low end and a nasal midrange. The difference in a raid video is obvious.</p></details>
+    <details><summary>Does it work with Tarkov's in-game voice chat?</summary><p>Yes. Set <code>CABLE Output</code> as the default recording device in Windows sound settings, or as the input in the game's audio settings, and every app hears the processed voice.</p></details>
+    <details><summary>Should I keep Blue VO!CE or NVIDIA Broadcast on?</summary><p>Turn them off while you use MicPRO. Stacking two noise reducers and two compressors makes a voice sound squashed and robotic.</p></details>
+    <details><summary>Can I record my voiceover straight from MicPRO?</summary><p>Yes. Record test saves a 24-bit WAV of the processed voice, and the raw mic alongside it, ready to drop into Premiere, Resolve or Vegas.</p></details>
+    <details><summary>Does anything get uploaded?</summary><p>No. All processing happens on your computer. MicPRO has no account, telemetry or cloud.</p></details>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <span>MicPRO is an independent project and is not affiliated with Shure, Logitech or Battlestate Games.</span>
+      <a href="https://github.com/g-hostproxy/MicPRO">Source on GitHub</a>
+    </div>
+  </footer>
+
+  <script>
+    // Highlight the visitor's platform.
+    (function () {
+      const ua = navigator.userAgent;
+      const os = /Mac/i.test(ua) ? 'mac' : /Linux/i.test(ua) && !/Android/i.test(ua) ? 'linux' : 'win';
+      const card = document.querySelector(`.dl[data-os="${os}"]`);
+      if (card) card.classList.add('rec');
+      if (os !== 'win') {
+        const hero = document.getElementById('hero-dl');
+        hero.href = card.href;
+        hero.querySelector('span').textContent = os === 'mac' ? 'Download for macOS' : 'Download for Linux';
+      }
+    })();
+
+    // Before / after scope.
+    (function () {
+      const box = document.getElementById('scope'), cv = document.getElementById('scope-canvas'), handle = document.getElementById('scope-handle');
+      const N = 900;
+      let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      // one fake "take": words with uneven loudness, a loud shout, room noise and sibilant spikes
+      const words = [[0.06, 0.16, 0.55], [0.19, 0.31, 0.35], [0.36, 0.44, 0.9], [0.5, 0.62, 0.28], [0.66, 0.78, 1.0], [0.83, 0.95, 0.45]];
+      const raw = new Float32Array(N), pro = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        const t = i / N; let v = 0, inWord = 0;
+        for (const [a, b, amp] of words) if (t > a && t < b) { const p = (t - a) / (b - a); inWord = amp * Math.sin(Math.PI * p) ** 0.6 * (0.75 + 0.25 * Math.sin(p * 40)); }
+        const sib = rnd() > 0.47 && inWord > 0.2 ? 0.25 : 0;
+        const noise = rnd() * 0.16 + Math.sin(i * 0.9) * 0.03;
+        v = inWord + sib * Math.random();
+        raw[i] = Math.min(1, v + Math.abs(noise));
+        // processed: noise gone, levels evened, peaks under the ceiling
+        const lv = inWord > 0 ? Math.pow(inWord, 0.55) * 0.84 : 0;
+        pro[i] = lv > 0 ? Math.min(0.86, lv * (0.58 + 0.42 * Math.abs(rnd() * 2))) : Math.abs(noise) * 0.04;
+      }
+      let split = 0.5, w = 0, h = 0;
+      const draw = () => {
+        const dpr = devicePixelRatio || 1; w = box.clientWidth; h = box.clientHeight;
+        cv.width = w * dpr; cv.height = h * dpr;
+        const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+        const mid = h / 2, amp = h * 0.36, sx = split * w;
+        g.strokeStyle = 'rgba(235,230,214,0.06)';
+        for (let y = mid - amp; y <= mid + amp + 1; y += amp / 2) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+        g.setLineDash([4, 6]); g.strokeStyle = 'rgba(255,94,70,0.45)';
+        for (const y of [mid - amp * 0.9, mid + amp * 0.9]) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+        g.setLineDash([]);
+        const bar = w / N;
+        for (let i = 0; i < N; i++) {
+          const x = i * bar, isPro = x > sx, v = (isPro ? pro : raw)[i];
+          g.fillStyle = isPro ? '#ffb23e' : (raw[i] > 0.9 ? '#ff5e46' : '#8b8a78');
+          g.fillRect(x, mid - v * amp, Math.max(1, bar * 0.8), v * amp * 2);
+        }
+        handle.style.left = `${sx}px`;
+        box.setAttribute('aria-valuenow', Math.round(split * 100));
+      };
+      const move = (e) => { const r = box.getBoundingClientRect(); split = Math.min(0.98, Math.max(0.02, (e.clientX - r.left) / r.width)); draw(); };
+      let dragging = false;
+      box.addEventListener('pointerdown', (e) => { dragging = true; box.setPointerCapture(e.pointerId); move(e); });
+      box.addEventListener('pointermove', (e) => { if (dragging || e.pointerType === 'mouse') move(e); });
+      box.addEventListener('pointerup', () => { dragging = false; });
+      box.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') split = Math.max(0.02, split - 0.05); else if (e.key === 'ArrowRight') split = Math.min(0.98, split + 0.05); else return; e.preventDefault(); draw(); });
+      new ResizeObserver(draw).observe(box);
+      // one orchestrated intro: sweep from raw to processed once
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const t0 = performance.now();
+        const step = (t) => { const p = Math.min(1, (t - t0) / 1600); split = 0.98 - (0.98 - 0.5) * (1 - Math.pow(1 - p, 3)); draw(); if (p < 1 && !dragging) requestAnimationFrame(step); };
+        split = 0.98; requestAnimationFrame(step);
+      }
+    })();
+  </script>
+</body>
+</html>

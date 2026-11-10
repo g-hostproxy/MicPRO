@@ -1,0 +1,47 @@
+{
+  "name": "micpro",
+  "productName": "MicPRO",
+  "version": "1.0.0",
+  "description": "Real-time microphone enhancement for streamers and creators: denoise, gate, EQ, de-esser, compressor and limiter with presets for the Shure SM7B and Logitech G Pro X.",
+  "main": "src/main/main.js",
+  "author": "MicPRO",
+  "license": "MIT",
+  "homepage": "https://github.com/g-hostproxy/MicPRO",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.micpro.app",
+    "productName": "MicPRO",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/tray.png", "build/icon.png", "build/icon.ico", "package.json"],
+    "publish": [{ "provider": "github", "owner": "g-hostproxy", "repo": "MicPRO", "releaseType": "release" }],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "artifactName": "MicPRO-Setup.${ext}"
+    },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "shortcutName": "MicPRO" },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "category": "public.app-category.music",
+      "icon": "build/icon.png",
+      "artifactName": "MicPRO-mac.${ext}",
+      "extendInfo": { "NSMicrophoneUsageDescription": "MicPRO processes your microphone in real time." }
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Audio",
+      "icon": "build/icon.png",
+      "artifactName": "MicPRO-linux.${ext}"
+    }
+  }
+}

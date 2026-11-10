@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob: mediastream:; img-src 'self' data:" />
+  <title>MicPRO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="11" y="3" width="10" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="2.4" />
+        <path d="M7 15a9 9 0 0 0 18 0M16 24v5M11 29h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+        <path d="M14 9h4M14 13h4" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" />
+      </svg>
+      <span class="brand-name">MicPRO</span>
+    </div>
+    <div class="status">
+      <span class="chip" id="chip-engine" data-state="off"><i></i><b>Off</b></span>
+      <span class="chip chip-preset" id="chip-preset">Shure SM7B</span>
+      <span class="chip chip-warn" id="chip-bypass" hidden>Bypassed</span>
+      <span class="chip chip-danger" id="chip-mute" hidden>Muted</span>
+    </div>
+    <div class="titlebar-actions">
+      <button class="icon-btn" id="btn-help" title="Setup guide" aria-label="Setup guide">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.2-2.5 3.8M12 17.2v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <section class="side-block">
+        <h2>Devices</h2>
+        <label class="field">
+          <span>Microphone</span>
+          <select id="sel-input"></select>
+        </label>
+        <div class="field">
+          <span>Mic channel</span>
+          <div class="seg" id="seg-channel" role="radiogroup" aria-label="Mic channel">
+            <button data-v="mix" role="radio">Both</button>
+            <button data-v="left" role="radio">Left / In 1</button>
+            <button data-v="right" role="radio">Right / In 2</button>
+          </div>
+          <small>SM7B on an audio interface? Pick the input it's plugged into.</small>
+        </div>
+        <label class="field">
+          <span>Send clean audio to</span>
+          <select id="sel-output"></select>
+          <small id="output-hint">Choose a virtual cable, then select its output as your mic in OBS or Discord.</small>
+        </label>
+        <div class="field">
+          <span class="field-row">
+            <span>Listen in headphones</span>
+            <button class="switch" id="sw-monitor" role="switch" aria-checked="false" aria-label="Listen in headphones"><i></i></button>
+          </span>
+          <select id="sel-monitor"></select>
+          <input type="range" id="monitor-vol" min="0" max="100" value="80" aria-label="Listen volume" />
+        </div>
+      </section>
+
+      <section class="side-block presets">
+        <h2>Presets</h2>
+        <ul id="preset-list" class="preset-list"></ul>
+        <div class="preset-actions">
+          <button class="btn-quiet" id="btn-save-preset">Save as preset</button>
+          <button class="btn-quiet" id="btn-import">Import</button>
+          <button class="btn-quiet" id="btn-export">Export</button>
+        </div>
+      </section>
+    </aside>
+
+    <main class="main">
+      <section class="scope" aria-label="Live analysis">
+        <div class="scope-view">
+          <canvas id="spectrum"></canvas>
+          <div class="scope-legend">
+            <span class="lg lg-raw">Mic in</span>
+            <span class="lg lg-out">MicPRO out</span>
+          </div>
+          <div class="scope-empty" id="scope-empty">
+            <p>Turn MicPRO on to start processing your mic.</p>
+          </div>
+        </div>
+        <div class="meters">
+          <div class="meter" id="m-in"><div class="meter-bar"><i class="rms"></i><i class="pk"></i></div><span>In</span></div>
+          <div class="meter" id="m-out"><div class="meter-bar"><i class="rms"></i><i class="pk"></i></div><span>Out</span></div>
+          <div class="gr-stack">
+            <div class="gr" id="gr-gate"><span>Gate</span><b class="led-dot"></b></div>
+            <div class="gr" id="gr-deess"><span>De-ess</span><div class="gr-bar"><i></i></div></div>
+            <div class="gr" id="gr-comp"><span>Comp</span><div class="gr-bar"><i></i></div></div>
+            <div class="gr" id="gr-lim"><span>Limit</span><div class="gr-bar"><i></i></div></div>
+            <div class="readout"><span>Out peak</span><b id="out-peak">–∞</b></div>
+          </div>
+        </div>
+        <div class="transport">
+          <button class="power" id="btn-power" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M6.3 6.6a8 8 0 1 0 11.4 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <span>Turn on</span>
+          </button>
+          <div class="ab" role="radiogroup" aria-label="Compare">
+            <button id="ab-proc" class="on" role="radio" aria-checked="true">Processed</button>
+            <button id="ab-raw" role="radio" aria-checked="false">Raw mic</button>
+          </div>
+          <button class="btn" id="btn-mute">Mute</button>
+          <button class="btn" id="btn-autolevel">Auto-set gain</button>
+          <div class="spacer"></div>
+          <button class="btn btn-rec" id="btn-rec"><b></b><span>Record test</span></button>
+          <span class="rec-time" id="rec-time" hidden>0:00</span>
+        </div>
+      </section>
+
+      <section class="rack" id="rack">
+        <article class="unit" data-unit="input">
+          <header><h3>Input</h3><button class="led" data-toggle="hpf.on" aria-label="Low cut on/off"></button><em>Low cut</em></header>
+          <div class="knobs">
+            <div class="knob" data-path="inputGain" data-min="-12" data-max="36" data-step="0.5" data-unit="dB" data-label="Gain"></div>
+            <div class="knob" data-path="hpf.freq" data-min="20" data-max="400" data-step="1" data-unit="Hz" data-label="Low cut" data-log></div>
+          </div>
+        </article>
+
+        <article class="unit" data-unit="denoise">
+          <header><h3>Denoise</h3><button class="led" data-toggle="denoise.on" aria-label="Denoise on/off"></button></header>
+          <div class="knobs">
+            <div class="knob" data-path="denoise.strength" data-min="0" data-max="1" data-step="0.01" data-unit="%" data-scale="100" data-label="Strength"></div>
+          </div>
+          <div class="unit-foot">
+            <label class="check"><input type="checkbox" data-check="denoise.browserNS" /><span>Voice isolation</span></label>
+            <button class="btn-mini" id="btn-learn">Learn room noise</button>
+          </div>
+        </article>
+
+        <article class="unit" data-unit="gate">
+          <header><h3>Gate</h3><button class="led" data-toggle="gate.on" aria-label="Gate on/off"></button></header>
+          <div class="knobs">
+            <div class="knob" data-path="gate.threshold" data-min="-80" data-max="-20" data-step="1" data-unit="dB" data-label="Threshold"></div>
+            <div class="knob" data-path="gate.range" data-min="-80" data-max="0" data-step="1" data-unit="dB" data-label="Depth"></div>
+            <div class="knob" data-path="gate.release" data-min="30" data-max="800" data-step="5" data-unit="ms" data-label="Release" data-log></div>
+          </div>
+          <div class="unit-foot gate-level"><div class="lvl"><i id="gate-env"></i><b id="gate-thr"></b></div><small>Room level vs threshold</small></div>
+        </article>
+
+        <article class="unit unit-wide" data-unit="eq">
+          <header><h3>Tone EQ</h3><button class="led" data-toggle="eq.on" aria-label="EQ on/off"></button><em id="eq-readout">Drag a point. Scroll to change width.</em></header>
+          <canvas id="eq-canvas" tabindex="0" aria-label="EQ curve"></canvas>
+          <div class="eq-bands" id="eq-bands"></div>
+        </article>
+
+        <article class="unit" data-unit="deesser">
+          <header><h3>De-esser</h3><button class="led" data-toggle="deesser.on" aria-label="De-esser on/off"></button></header>
+          <div class="knobs">
+            <div class="knob" data-path="deesser.frequency" data-min="3000" data-max="11000" data-step="50" data-unit="Hz" data-label="Focus" data-log></div>
+            <div class="knob" data-path="deesser.threshold" data-min="-60" data-max="-6" data-step="1" data-unit="dB" data-label="Threshold"></div>
+            <div class="knob" data-path="deesser.maxReduction" data-min="2" data-max="20" data-step="0.5" data-unit="dB+" data-label="Max cut"></div>
+          </div>
+        </article>
+
+        <article class="unit" data-unit="warmth">
+          <header><h3>Warmth</h3><button class="led" data-toggle="warmth.on" aria-label="Warmth on/off"></button></header>
+          <div class="knobs">
+            <div class="knob" data-path="warmth.drive" data-min="0" data-max="100" data-step="1" data-unit="%" data-label="Drive"></div>
+            <div class="knob" data-path="warmth.mix" data-min="0" data-max="100" data-step="1" data-unit="%" data-label="Blend"></div>
+          </div>
+        </article>
+
+        <article class="unit unit-comp" data-unit="comp">
+          <header><h3>Compressor</h3><button class="led" data-toggle="comp.on" aria-label="Compressor on/off"></button></header>
+          <div class="knobs">
+            <div class="knob" data-path="comp.threshold" data-min="-50" data-max="0" data-step="0.5" data-unit="dB" data-label="Threshold"></div>
+            <div class="knob" data-path="comp.ratio" data-min="1" data-max="12" data-step="0.1" data-unit=":1" data-label="Ratio"></div>
+            <div class="knob" data-path="comp.attack" data-min="0.5" data-max="60" data-step="0.5" data-unit="ms" data-label="Attack" data-log></div>
+            <div class="knob" data-path="comp.release" data-min="20" data-max="600" data-step="5" data-unit="ms" data-label="Release" data-log></div>
+            <div class="knob" data-path="comp.makeup" data-min="0" data-max="24" data-step="0.5" data-unit="dB" data-label="Makeup"></div>
+          </div>
+        </article>
+
+        <article class="unit" data-unit="output">
+          <header><h3>Output</h3><button class="led" data-toggle="limiter.on" aria-label="Limiter on/off"></button><em>Limiter</em></header>
+          <div class="knobs">
+            <div class="knob" data-path="limiter.ceiling" data-min="-12" data-max="0" data-step="0.1" data-unit="dB" data-label="Ceiling"></div>
+            <div class="knob" data-path="output" data-min="-24" data-max="12" data-step="0.5" data-unit="dB" data-label="Level"></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <!-- recording result -->
+  <dialog id="dlg-rec" class="dlg">
+    <form method="dialog">
+      <h2>Test recording</h2>
+      <p class="muted" id="rec-info"></p>
+      <div class="ab-play">
+        <button type="button" class="btn" id="play-raw">Play raw mic</button>
+        <button type="button" class="btn btn-amber" id="play-proc">Play MicPRO</button>
+        <button type="button" class="btn-quiet" id="play-stop">Stop</button>
+      </div>
+      <canvas id="rec-wave" height="90"></canvas>
+      <div class="dlg-actions">
+        <button type="button" class="btn-quiet" id="save-raw">Save raw WAV</button>
+        <button type="button" class="btn" id="save-proc">Save processed WAV</button>
+        <button class="btn-quiet" value="close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- setup guide -->
+  <dialog id="dlg-help" class="dlg dlg-wide">
+    <form method="dialog">
+      <h2>Get MicPRO into OBS, Discord and your recordings</h2>
+      <ol class="steps">
+        <li><b>Install a virtual audio cable.</b> On Windows the free <a href="https://vb-audio.com/Cable/" data-external>VB-CABLE</a> works well. Restart MicPRO afterwards.</li>
+        <li><b>Pick your mic</b> under Devices. For the SM7B, choose your audio interface and the input the mic is plugged into.</li>
+        <li><b>Set "Send clean audio to" to <code>CABLE Input</code>.</b></li>
+        <li><b>In OBS, Discord or the game,</b> choose <code>CABLE Output</code> as the microphone. Turn off their own noise suppression and auto gain so audio isn't processed twice.</li>
+        <li><b>Load a preset and press Auto-set gain</b>, then talk at your normal raid volume for five seconds.</li>
+        <li><b>Record a test</b> and compare raw against processed before you hit record on a raid.</li>
+      </ol>
+      <p class="muted">Logitech Pro X: turn Blue VO!CE off in G HUB and set the mic level to about 80%. Shure SM7B: give it 55–60 dB of clean gain from your interface (or a Cloudlifter / FetHead) before MicPRO adds anything.</p>
+      <div class="dlg-actions"><button class="btn" value="close">Got it</button></div>
+    </form>
+  </dialog>
+
+  <!-- settings -->
+  <dialog id="dlg-settings" class="dlg">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label class="field"><span>Mute hotkey</span><input id="hk-mute" class="hotkey" readonly /></label>
+      <label class="field"><span>Bypass hotkey</span><input id="hk-bypass" class="hotkey" readonly /></label>
+      <label class="check"><input type="checkbox" id="opt-tray" /><span>Keep running in the tray when the window is closed</span></label>
+      <label class="check"><input type="checkbox" id="opt-autostart" /><span>Turn processing on when MicPRO opens</span></label>
+      <p class="muted" id="about"></p>
+      <div class="dlg-actions"><button class="btn" value="close">Done</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-name" class="dlg">
+    <form method="dialog">
+      <h2>Save preset</h2>
+      <label class="field"><span>Name</span><input id="preset-name" maxlength="40" required /></label>
+      <div class="dlg-actions"><button class="btn-quiet" value="cancel" formnovalidate>Cancel</button><button class="btn btn-amber" value="ok">Save</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
