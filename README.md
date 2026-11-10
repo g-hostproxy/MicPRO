@@ -41,7 +41,7 @@ npm run dist:win   # build an installer into app/dist
 
 ## Releases
 
-Pushing a tag like `v1.0.1` runs `.github/workflows/release.yml`, which builds Windows, macOS and Linux installers and attaches them to a GitHub release. The download buttons on the website point at `releases/latest`, so they update automatically.
+Bump `version` in `app/package.json` and push to `main`. `.github/workflows/release.yml` builds Windows, macOS and Linux installers and publishes them as the matching `vX.Y.Z` GitHub release. You can also run it by hand from the Actions tab. The download buttons on the website point at `releases/latest`, so they update automatically.
 
 ## Website
 

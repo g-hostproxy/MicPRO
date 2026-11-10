@@ -1,8 +1,11 @@
 name: Build and release
 
+# Runs whenever the app version in app/package.json changes on main (or by hand from the Actions tab).
+# electron-builder creates the matching vX.Y.Z GitHub release and uploads the installers to it.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['app/package.json', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
