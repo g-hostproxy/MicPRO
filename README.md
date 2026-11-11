@@ -13,7 +13,8 @@ Real-time microphone enhancement for streamers and video creators. MicPRO sits b
 - **Draggable EQ curve** (low cut, body, mud, presence, air, high cut).
 - **Split-band de-esser** that only turns down the sibilant band.
 - **Warmth** (parallel tanh saturation), **compressor**, and a **limiter** that keeps peaks under the ceiling.
-- **Presets** for the **Shure SM7B** and **Logitech G Pro X**, plus Clean Streamer, Movie Voiceover and Squad Radio. Save, import and export your own.
+- **Presets** for the **Shure SM7B** and **Logitech G Pro X**, plus Clean Streamer and Movie Voiceover. Save, import and export your own.
+- **Voice changer** with radio voices (Walkie-Talkie, Tactical Comms, Field Radio). It models a real transmitter: voice-activated key-up click, band-limited overdriven voice, static, crackle and signal breakups, roger beep and squelch tail. Static, grit, interference, tail length and level are adjustable per voice, with a hotkey to toggle it.
 - **Auto-set gain**: talk for five seconds and MicPRO sets your input level.
 - **Record test**: record raw and processed side by side, A/B them, save 24-bit WAVs for your edits.
 - **Global hotkeys** for mute and bypass, tray mode, headphone monitoring.
@@ -59,7 +60,8 @@ app/
   src/renderer/            UI (HTML/CSS/JS)
     audio-engine.js        Web Audio processing graph
     presets.js             factory presets
-    dsp/processors.js      AudioWorklet DSP: denoise, gate, de-esser, recorder
+    voices.js              voice changer voices
+    dsp/processors.js      AudioWorklet DSP: denoise, gate, de-esser, radio voice, recorder
 ```
 
 MIT licensed. Not affiliated with Shure, Logitech or Battlestate Games.

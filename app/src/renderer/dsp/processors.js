@@ -321,7 +321,222 @@ class RecorderProcessor extends AudioWorkletProcessor {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Voice changer: two-way radio transmission model                     */
+/* ------------------------------------------------------------------ */
+/*
+ * Models what actually happens on a radio link instead of just EQ'ing the voice:
+ *  1. VOX keying: talking keys the transmitter (key-up click + carrier noise),
+ *     silence after a hold time un-keys it (optional roger beep + squelch tail "kssh").
+ *  2. Transmit chain: band-limit -> fast AGC (handheld radios ride the mic gain hard)
+ *     -> over-modulation clipping -> optional codec crush -> tiny-speaker resonance.
+ *  3. Channel: hiss that the voice partly "captures" (FM) or sits on top of (AM),
+ *     crackle impulses, short signal breakups, slow fading and heterodyne whistle.
+ */
+
+class Biquad {
+  constructor() { this.b0 = 1; this.b1 = 0; this.b2 = 0; this.a1 = 0; this.a2 = 0; this.z1 = 0; this.z2 = 0; }
+  set(type, f, q, gainDb = 0) {
+    const w0 = (2 * Math.PI * Math.min(f, sampleRate * 0.45)) / sampleRate;
+    const cw = Math.cos(w0), sw = Math.sin(w0), alpha = sw / (2 * q), A = Math.pow(10, gainDb / 40);
+    let b0, b1, b2, a0, a1, a2;
+    if (type === 'lp') { b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = b0; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }
+    else if (type === 'hp') { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = b0; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }
+    else { b0 = 1 + alpha * A; b1 = -2 * cw; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cw; a2 = 1 - alpha / A; }
+    this.b0 = b0 / a0; this.b1 = b1 / a0; this.b2 = b2 / a0; this.a1 = a1 / a0; this.a2 = a2 / a0;
+  }
+  run(x) { // transposed direct form II
+    const y = this.b0 * x + this.z1;
+    this.z1 = this.b1 * x - this.a1 * y + this.z2;
+    this.z2 = this.b2 * x - this.a2 * y;
+    return y;
+  }
+}
+
+class VoiceFxProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.p = { enabled: false };
+    // voice band (4th-order HP + 4th-order LP), speaker resonance, post DC block
+    this.vHp = [new Biquad(), new Biquad()]; this.vLp = [new Biquad(), new Biquad()];
+    this.vPeak = new Biquad(); this.vPost = new Biquad();
+    // noise band
+    this.nHp = new Biquad(); this.nLp = [new Biquad(), new Biquad()];
+    this.oLp = [new Biquad(), new Biquad()];
+    this.seed = 0x2468ace1;
+    this.env = 0; this.floor = 0; this.keyed = false; this.holdLeft = 0;
+    this.minRing = new Float32Array(Math.ceil(sampleRate / 128)); this.minPos = 0; this.blockMin = 1;
+    this.lvl = 1e-4; this.agc = 1; this.vEnv = 0;
+    this.keyGain = 0; this.breakGain = 1; this.breakLeft = 0;
+    this.crushPhase = 0; this.held = 0;
+    this.crackAmp = 0;
+    this.clickLeft = 0; this.beepLeft = 0; this.tailLeft = 0; this.tailLen = 1;
+    this.beepPhase = 0; this.hetPhase = 0; this.t = 0;
+    this.reportedTx = null;
+    this.configure({});
+    this.port.onmessage = (e) => this.configure(e.data || {});
+  }
+
+  configure(d) {
+    const p = Object.assign(this.p, d);
+    const def = (k, v) => { if (typeof p[k] !== 'number') p[k] = v; };
+    def('lowCut', 350); def('highCut', 3000); def('peakFreq', 1800); def('peakGain', 4);
+    def('agcTarget', -16); def('agcMax', 22); def('drive', 3); def('asym', 0.15);
+    def('crushRate', 0); def('bits', 0); def('hiss', 0.05); def('duck', 0.7);
+    def('crackle', 0.2); def('breakup', 0.1); def('fading', 0); def('hetFreq', 0); def('hetLevel', 0);
+    def('tailMs', 180); def('tailLevel', 0.3); def('click', 0.5); def('beepF1', 1450); def('beepF2', 1000);
+    def('out', 0); def('keyThreshold', -42); def('holdMs', 380);
+    this.vHp[0].set('hp', p.lowCut, 0.5412); this.vHp[1].set('hp', p.lowCut, 1.3066);
+    this.vLp[0].set('lp', p.highCut, 0.5412); this.vLp[1].set('lp', p.highCut, 1.3066);
+    this.vPeak.set('peak', p.peakFreq, 1.1, p.peakGain);
+    this.vPost.set('hp', Math.max(60, p.lowCut * 0.6), 0.707);
+    this.nHp.set('hp', p.lowCut * 1.2, 0.707);
+    this.nLp[0].set('lp', p.highCut * 1.1, 0.5412); this.nLp[1].set('lp', p.highCut * 1.1, 1.3066);
+    this.oLp[0].set('lp', p.highCut * 1.3, 0.5412); this.oLp[1].set('lp', p.highCut * 1.3, 1.3066);
+    this.keyLin = dbToLin(p.keyThreshold);
+    this.holdN = Math.round((p.holdMs / 1000) * sampleRate);
+    this.agcTargetLin = dbToLin(p.agcTarget); this.agcMaxLin = dbToLin(p.agcMax);
+    this.outLin = dbToLin(p.out);
+    this.asymOff = Math.tanh(p.asym);
+    this.bitQ = p.bits > 0 ? Math.pow(2, p.bits - 1) : 0;
+    this.clickN = Math.round(0.022 * sampleRate);
+    this.beepN = Math.round(0.075 * sampleRate);
+    this.cEnvA = timeCoef(0.6, sampleRate); this.cEnvR = timeCoef(70, sampleRate);
+    this.cLvlA = timeCoef(2, sampleRate); this.cLvlR = timeCoef(140, sampleRate);
+    this.cAgcDown = timeCoef(1.5, sampleRate); this.cAgcUp = timeCoef(90, sampleRate);
+    this.cKey = timeCoef(2.5, sampleRate); this.cBreak = timeCoef(1.2, sampleRate);
+    this.cCrack = Math.exp(-1 / (0.0007 * sampleRate));
+    if (!p.enabled) { this.keyed = false; this.clickLeft = this.beepLeft = this.tailLeft = 0; }
+  }
+
+  rnd() { // xorshift32, uniform in [-1, 1)
+    let x = this.seed; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this.seed = x >>> 0;
+    return (this.seed / 2147483648) - 1;
+  }
+
+  keyUp() {
+    this.clickLeft = this.clickN;
+    this.beepLeft = 0; this.tailLeft = 0;
+  }
+
+  keyDown() {
+    const p = this.p;
+    this.beepLeft = p.beep ? this.beepN * 2 : 0;
+    this.tailLen = p.squelch ? Math.max(1, Math.round((p.tailMs / 1000) * sampleRate)) : 0;
+    this.tailLeft = this.tailLen;
+  }
+
+  process(inputs, outputs) {
+    const input = inputs[0] && inputs[0][0];
+    const out = outputs[0][0];
+    const p = this.p, sr = sampleRate;
+    if (!input) { out.fill(0); return true; }
+    if (!p.enabled) { out.set(input); for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out); return true; }
+    // noise floor = minimum envelope over the last second (one entry per 128-sample block)
+    this.minRing[this.minPos] = this.blockMin; this.minPos = (this.minPos + 1) % this.minRing.length; this.blockMin = 1;
+    let fl = 1; for (let k = 0; k < this.minRing.length; k++) if (this.minRing[k] < fl) fl = this.minRing[k];
+    this.floor = fl;
+
+    for (let i = 0; i < out.length; i++) {
+      const x = input[i];
+      this.t++;
+
+      /* -------- keying (VOX) -------- */
+      const ax = x < 0 ? -x : x;
+      this.env = ax > this.env ? this.cEnvA * this.env + (1 - this.cEnvA) * ax : this.cEnvR * this.env + (1 - this.cEnvR) * ax;
+      // adaptive threshold: keying needs ~11 dB over the quietest level of the last second,
+      // so a noisy room or an open gate can't hold the transmitter open
+      if (this.env < this.blockMin) this.blockMin = this.env;
+      const thr = Math.min(0.1, Math.max(this.keyLin, this.floor * 3.5));
+      if (this.env > thr) {
+        if (!this.keyed) this.keyUp();
+        this.keyed = true; this.holdLeft = this.holdN;
+      } else if (this.keyed && --this.holdLeft <= 0) {
+        this.keyed = false; this.keyDown();
+      }
+
+      /* -------- transmit chain -------- */
+      let v = this.vHp[1].run(this.vHp[0].run(x));
+      const av = v < 0 ? -v : v;
+      this.lvl = av > this.lvl ? this.cLvlA * this.lvl + (1 - this.cLvlA) * av : this.cLvlR * this.lvl + (1 - this.cLvlR) * av;
+      const gT = Math.min(this.agcMaxLin, this.agcTargetLin / Math.max(this.lvl, 1e-6));
+      this.agc = gT < this.agc ? this.cAgcDown * this.agc + (1 - this.cAgcDown) * gT : this.cAgcUp * this.agc + (1 - this.cAgcUp) * gT;
+      v *= this.agc;
+      const vNorm = Math.min(1, (v < 0 ? -v : v) / this.agcTargetLin);
+      this.vEnv = vNorm > this.vEnv ? 0.995 * this.vEnv + 0.005 * vNorm : 0.9995 * this.vEnv + 0.0005 * vNorm;
+      // over-modulation: driven asymmetric tanh (adds odd + even harmonics like a cheap mic amp)
+      v = (Math.tanh(v * p.drive + p.asym) - this.asymOff) / Math.tanh(Math.max(1, p.drive) * 0.5 + 0.5);
+      if (p.crushRate > 0) {
+        this.crushPhase += p.crushRate / sr;
+        if (this.crushPhase >= 1) { this.crushPhase -= 1; this.held = v; }
+        v = this.held;
+      }
+      if (this.bitQ) v = Math.round(v * this.bitQ) / this.bitQ;
+      v = this.vLp[1].run(this.vLp[0].run(v));
+      v = this.vPost.run(this.vPeak.run(v));
+      if (p.fading > 0) {
+        const lfo = 0.5 + 0.25 * Math.sin((2 * Math.PI * 0.23 * this.t) / sr) + 0.25 * Math.sin((2 * Math.PI * 0.61 * this.t) / sr);
+        v *= 1 - p.fading * lfo * lfo;
+      }
+
+      /* -------- channel -------- */
+      this.keyGain = this.cKey * this.keyGain + (1 - this.cKey) * (this.keyed ? 1 : 0);
+      if (this.keyed && this.breakLeft <= 0 && p.breakup > 0 && Math.random() < p.breakup * 0.00005) {
+        this.breakLeft = Math.round((0.02 + Math.random() * 0.07) * sr);
+      }
+      let breaking = false;
+      if (this.breakLeft > 0) { this.breakLeft--; breaking = true; }
+      this.breakGain = this.cBreak * this.breakGain + (1 - this.cBreak) * (breaking ? 0.05 : 1);
+
+      // raw noise source that gets band-limited like the voice
+      let pre = 0;
+      if (this.keyGain > 0.001) {
+        const capture = 1 - p.duck * Math.min(1, this.vEnv * 1.6);
+        pre += this.rnd() * p.hiss * capture * this.keyGain * (breaking ? 4 : 1);
+        if (Math.random() < p.crackle * 0.0007) this.crackAmp = 0.15 + Math.random() * 0.75;
+      }
+      if (this.crackAmp > 0.001) { pre += this.rnd() * this.crackAmp; this.crackAmp *= this.cCrack; }
+      if (this.clickLeft > 0) {
+        const k = this.clickLeft / this.clickN; // 1 -> 0
+        pre += p.click * (this.rnd() * 0.9 * k * k + (this.clickLeft > this.clickN - 48 ? 0.6 : 0));
+        this.clickLeft--;
+      }
+      let tone = 0;
+      if (!this.keyed && this.beepLeft > 0) {
+        const f = this.beepLeft > this.beepN ? p.beepF1 : p.beepF2;
+        this.beepPhase += f / sr; if (this.beepPhase > 1) this.beepPhase -= 1;
+        const posInTone = this.beepLeft > this.beepN ? this.beepLeft - this.beepN : this.beepLeft;
+        const edge = Math.min(1, posInTone / 96, (this.beepN - posInTone) / 96);
+        tone = Math.tanh(1.5 * Math.sin(2 * Math.PI * this.beepPhase)) * 0.22 * edge;
+        this.beepLeft--;
+      } else if (!this.keyed && this.tailLeft > 0) {
+        // squelch tail: carrier drops, receiver opens on raw noise for a moment, then slams shut
+        const pos = this.tailLen - this.tailLeft;
+        const a = Math.min(1, pos / (0.002 * sr)), r = Math.min(1, this.tailLeft / (0.008 * sr));
+        pre += this.rnd() * p.tailLevel * a * r * 3.2;
+        this.tailLeft--;
+      }
+      let n = this.nLp[1].run(this.nLp[0].run(this.nHp.run(pre)));
+      if (p.hetLevel > 0 && this.keyGain > 0.001) {
+        this.hetPhase += (p.hetFreq + 18 * Math.sin((2 * Math.PI * 0.09 * this.t) / sr)) / sr;
+        if (this.hetPhase > 1) this.hetPhase -= 1;
+        n += Math.sin(2 * Math.PI * this.hetPhase) * p.hetLevel * this.keyGain;
+      }
+
+      // receiver audio stage: gentle saturation keeps clicks, crackle and tails below full scale
+      let y = Math.tanh((v * this.keyGain * this.breakGain + n + tone) * 0.9) * 0.82;
+      y = this.oLp[1].run(this.oLp[0].run(y)); // small speaker: nothing survives far above the radio band
+      out[i] = y * this.outLin;
+    }
+    for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out);
+    const tx = this.keyed || this.tailLeft > 0 || this.beepLeft > 0;
+    if (tx !== this.reportedTx) { this.reportedTx = tx; this.port.postMessage({ tx }); }
+    return true;
+  }
+}
+
 registerProcessor('micpro-denoise', DenoiseProcessor);
 registerProcessor('micpro-gate', GateProcessor);
 registerProcessor('micpro-deesser', DeesserProcessor);
 registerProcessor('micpro-recorder', RecorderProcessor);
+registerProcessor('micpro-voice', VoiceFxProcessor);

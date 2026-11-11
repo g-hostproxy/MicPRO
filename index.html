@@ -100,6 +100,12 @@
     .preset dt { color: var(--dim); }
     .preset dd { margin: 0; }
     .more-presets { color: var(--muted); margin-top: 22px; font-size: 16px; }
+    .voices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .voice { border: 1px solid var(--line); border-radius: 8px; padding: 22px 22px 20px; background: linear-gradient(180deg, #25291f, #1c1f17); position: relative; }
+    .voice::before { content: 'TX'; position: absolute; top: 20px; right: 20px; font: 700 11px/1 var(--display); letter-spacing: 0.08em; padding: 4px 7px; border-radius: 4px; background: var(--red); color: #2a0904; box-shadow: 0 0 12px rgba(255, 94, 70, 0.5); }
+    .voice h3 { font: 700 22px/1.15 var(--display); margin: 0 0 4px; }
+    .voice .kind { color: var(--amber); font-size: 15px; margin: 0 0 10px; }
+    .voice p { color: var(--muted); margin: 0; }
 
     /* setup */
     .setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; counter-reset: st; list-style: none; padding: 0; margin: 0; }
@@ -135,7 +141,7 @@
       .chain { grid-template-columns: 1fr 1fr; }
       .chain li { border-bottom: 1px solid var(--line); }
       .chain li::after { display: none; }
-      .presets, .setup, .dl-grid { grid-template-columns: 1fr; }
+      .presets, .setup, .dl-grid, .voices { grid-template-columns: 1fr; }
       nav .links { display: none; }
       nav .btn { margin-left: auto; }
     }
@@ -150,6 +156,7 @@
       <div class="links">
         <a href="#how">How it works</a>
         <a href="#presets">Presets</a>
+        <a href="#voices">Voice changer</a>
         <a href="#setup">Setup</a>
         <a href="#faq">FAQ</a>
         <a href="https://github.com/g-hostproxy/MicPRO">GitHub</a>
@@ -229,7 +236,18 @@
         </dl>
       </article>
     </div>
-    <p class="more-presets">Also included: Clean Streamer for any mic, Movie Voiceover for raid-edit narration, and Squad Radio for crunchy comms callouts in your videos.</p>
+    <p class="more-presets">Also included: Clean Streamer for any mic and Movie Voiceover for raid-edit narration.</p>
+  </section>
+
+  <section class="wrap" id="voices">
+    <h2>Talk like you're on the radio.</h2>
+    <p class="section-lede">The voice changer acts like a real transmitter. Talking keys it up with a click, your voice goes out band-limited and overdriven over a bed of static, and letting go closes the channel with a squelch tail. It works live in Discord, in game and on stream.</p>
+    <div class="voices">
+      <article class="voice"><h3>Walkie-Talkie</h3><p class="kind">Handheld FM radio</p><p>The squad handheld: hard-compressed, crunchy, and the classic "kssh" when you stop talking.</p></article>
+      <article class="voice"><h3>Tactical Comms</h3><p class="kind">Encrypted digital headset</p><p>Tight military intercom with a faint codec edge, a key-up chirp and a quick roger beep.</p></article>
+      <article class="voice"><h3>Field Radio</h3><p class="kind">Long-range AM</p><p>Boxy and buried in static, with fading, a drifting whistle and the signal breaking up.</p></article>
+    </div>
+    <p class="more-presets">Dial in static, grit, interference and tail length per voice, and flip the voice changer on and off with a hotkey mid-raid.</p>
   </section>
 
   <section class="wrap" id="setup">
@@ -245,7 +263,7 @@
   <section class="download" id="download">
     <div class="wrap">
       <h2>Download MicPRO</h2>
-      <p class="section-lede">Version 1.0. Free and open source under the MIT license.</p>
+      <p class="section-lede">Version 1.1 with the voice changer. Free and open source under the MIT license.</p>
       <div class="dl-grid">
         <a class="dl" data-os="win" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-Setup.exe"><b>Windows</b><span>Windows 10 and 11, 64-bit installer</span><em>MicPRO-Setup.exe</em></a>
         <a class="dl" data-os="mac" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-mac.dmg"><b>macOS</b><span>Apple silicon and Intel</span><em>MicPRO-mac.dmg</em></a>

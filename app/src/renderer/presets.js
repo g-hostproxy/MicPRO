@@ -128,31 +128,6 @@ export const FACTORY_PRESETS = [
       output: 0,
     },
   },
-  {
-    id: 'radio',
-    name: 'Squad Radio',
-    tag: 'Effect',
-    blurb: 'Band-limited, crunchy comms voice for squad callouts in your edits.',
-    settings: {
-      inputGain: 0,
-      hpf: { on: true, freq: 380 },
-      denoise: { on: true, strength: 0.6, browserNS: false },
-      gate: { on: true, threshold: -46, range: -60, attack: 1, hold: 80, release: 90 },
-      eq: {
-        on: true,
-        low: { freq: 400, gain: -4 },
-        mud: { freq: 900, gain: 3, q: 0.8 },
-        presence: { freq: 2200, gain: 6, q: 1.2 },
-        air: { freq: 5000, gain: -10 },
-        lpf: { freq: 3400 },
-      },
-      deesser: { on: false, frequency: 6500, threshold: -30, maxReduction: 6 },
-      warmth: { on: true, drive: 80, mix: 85 },
-      comp: { on: true, threshold: -30, ratio: 8, attack: 2, release: 80, knee: 2, makeup: 10 },
-      limiter: { on: true, ceiling: -2 },
-      output: 0,
-    },
-  },
 ];
 
 export function clone(o) {

@@ -72,6 +72,7 @@ function createTray() {
     { label: 'Show MicPRO', click: () => { win.show(); win.focus(); } },
     { label: 'Mute / unmute', click: () => win.webContents.send('hotkey', 'mute') },
     { label: 'Bypass on / off', click: () => win.webContents.send('hotkey', 'bypass') },
+    { label: 'Voice changer on / off', click: () => win.webContents.send('hotkey', 'voice') },
     { type: 'separator' },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]);

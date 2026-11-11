@@ -1,5 +1,6 @@
 import { AudioEngine, encodeWav } from './audio-engine.js';
 import { FACTORY_PRESETS, DEFAULT_SETTINGS, normalize, clone } from './presets.js';
+import { VOICES, voiceDefaults, voiceDsp } from './voices.js';
 
 /* ------------------------------------------------------------------ */
 /* platform bridge (falls back gracefully when run in a plain browser) */
@@ -37,13 +38,24 @@ const store = {
 
 const prefs = Object.assign(
   { inputId: 'default', outputId: null, monitorId: '', inputChannel: 'mix', monitorOn: false, monitorVolume: 0.8,
-    hotkeys: { mute: 'CommandOrControl+Shift+M', bypass: 'CommandOrControl+Shift+B' }, tray: true, autostart: false, seenHelp: false },
+    hotkeys: {}, tray: true, autostart: false, seenHelp: false },
   store.get('prefs', {}),
 );
+prefs.hotkeys = { mute: 'CommandOrControl+Shift+M', bypass: 'CommandOrControl+Shift+B', voice: 'CommandOrControl+Alt+V', ...prefs.hotkeys };
 let userPresets = store.get('userPresets', []);
 let activePresetId = store.get('activePreset', 'sm7b');
 let modified = store.get('modified', false);
 let settings = normalize(store.get('settings', null) || (allPresets().find((p) => p.id === activePresetId) || FACTORY_PRESETS[0]).settings);
+
+// voice changer state: which voice is live, plus each voice's own knob settings
+const voice = (() => {
+  const v = store.get('voice', {});
+  const per = {};
+  for (const def of VOICES) per[def.id] = { ...voiceDefaults(def.id), ...(v.per?.[def.id] || {}), id: def.id };
+  const ok = (id) => VOICES.some((d) => d.id === id);
+  return { active: ok(v.active) ? v.active : 'off', last: ok(v.last) ? v.last : VOICES[0].id, per };
+})();
+const shownVoiceId = () => (voice.active !== 'off' ? voice.active : voice.last);
 
 const engine = new AudioEngine();
 const savePrefs = () => store.set('prefs', prefs);
@@ -101,7 +113,9 @@ function makeKnob(el) {
   const k = {
     el, path: el.dataset.path, min: +el.dataset.min, max: +el.dataset.max, step: +el.dataset.step || 1,
     unit: el.dataset.unit || '', scale: +el.dataset.scale || 1, log: el.hasAttribute('data-log'),
+    isVoice: el.dataset.root === 'voice',
   };
+  k.root = () => (k.isVoice ? voice.per[shownVoiceId()] : settings);
   el.tabIndex = 0;
   el.setAttribute('role', 'slider');
   el.setAttribute('aria-label', el.dataset.label);
@@ -116,7 +130,7 @@ function makeKnob(el) {
   const toNorm = (v) => k.log ? Math.log(v / k.min) / Math.log(k.max / k.min) : (v - k.min) / (k.max - k.min);
   const fromNorm = (n) => { n = Math.min(1, Math.max(0, n)); const v = k.log ? k.min * Math.pow(k.max / k.min, n) : k.min + n * (k.max - k.min); return Math.round(v / k.step) * k.step; };
   k.render = () => {
-    const v = getPath(settings, k.path);
+    const v = getPath(k.root(), k.path);
     const n = toNorm(v), ang = A0 + n * (A1 - A0);
     // bipolar knobs (range crosses zero) draw their arc from the centre
     const zeroAng = k.min < 0 && k.max > 0 && !k.log ? A0 + toNorm(0) * (A1 - A0) : A0;
@@ -126,12 +140,12 @@ function makeKnob(el) {
     el.setAttribute('aria-valuenow', v);
     el.setAttribute('aria-valuetext', k.valEl.textContent);
   };
-  const commit = (v) => { v = Math.min(k.max, Math.max(k.min, +v.toFixed(4))); setPath(settings, k.path, v); onSettingsChanged(); };
+  const commit = (v) => { v = Math.min(k.max, Math.max(k.min, +v.toFixed(4))); setPath(k.root(), k.path, v); if (k.isVoice) onVoiceChanged(); else onSettingsChanged(); };
 
   let drag = null;
   el.addEventListener('pointerdown', (e) => {
     el.setPointerCapture(e.pointerId); el.focus();
-    drag = { y: e.clientY, n: toNorm(getPath(settings, k.path)) };
+    drag = { y: e.clientY, n: toNorm(getPath(k.root(), k.path)) };
   });
   el.addEventListener('pointermove', (e) => {
     if (!drag) return;
@@ -139,8 +153,9 @@ function makeKnob(el) {
     commit(fromNorm(drag.n + (drag.y - e.clientY) / sens));
   });
   el.addEventListener('pointerup', () => { drag = null; });
-  el.addEventListener('wheel', (e) => { e.preventDefault(); commit(fromNorm(toNorm(getPath(settings, k.path)) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.025))); }, { passive: false });
+  el.addEventListener('wheel', (e) => { e.preventDefault(); commit(fromNorm(toNorm(getPath(k.root(), k.path)) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.025))); }, { passive: false });
   el.addEventListener('dblclick', () => {
+    if (k.isVoice) return commit(voiceDefaults(shownVoiceId())[k.path]);
     const preset = allPresets().find((p) => p.id === activePresetId);
     commit(getPath(preset ? normalize(preset.settings) : DEFAULT_SETTINGS, k.path));
   });
@@ -148,7 +163,7 @@ function makeKnob(el) {
     const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key];
     if (!d) return;
     e.preventDefault();
-    commit(fromNorm(toNorm(getPath(settings, k.path)) + d * (e.shiftKey ? 0.004 : 0.02)));
+    commit(fromNorm(toNorm(getPath(k.root(), k.path)) + d * (e.shiftKey ? 0.004 : 0.02)));
   });
   knobs.push(k);
 }
@@ -158,6 +173,50 @@ $$('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
   setPath(settings, b.dataset.toggle, !getPath(settings, b.dataset.toggle)); onSettingsChanged();
 }));
 $$('[data-check]').forEach((c) => c.addEventListener('change', () => { setPath(settings, c.dataset.check, c.checked); onSettingsChanged(); }));
+
+/* ------------------------------------------------------------------ */
+/* voice changer                                                       */
+/* ------------------------------------------------------------------ */
+const voiceList = $('#voice-list');
+for (const def of [{ id: 'off', name: 'Off', tag: 'Your real voice' }, ...VOICES]) {
+  const b = document.createElement('button');
+  b.className = 'voice-btn'; b.dataset.voice = def.id; b.setAttribute('role', 'radio');
+  b.innerHTML = '<b></b><span></span>';
+  $('b', b).textContent = def.name; $('span', b).textContent = def.tag;
+  b.addEventListener('click', () => setVoice(def.id));
+  voiceList.appendChild(b);
+}
+$$('[data-vcheck]').forEach((c) => c.addEventListener('change', () => { voice.per[shownVoiceId()][c.dataset.vcheck] = c.checked; onVoiceChanged(); }));
+$('#btn-voice-reset').addEventListener('click', () => {
+  const id = shownVoiceId(); voice.per[id] = voiceDefaults(id); onVoiceChanged();
+});
+
+function setVoice(id) {
+  voice.active = id;
+  if (id !== 'off') voice.last = id;
+  onVoiceChanged();
+}
+function toggleVoice() { setVoice(voice.active === 'off' ? voice.last : 'off'); }
+
+function onVoiceChanged() {
+  engine.setVoice(voice.active === 'off' ? { enabled: false } : voiceDsp(voice.per[voice.active]));
+  store.set('voice', voice);
+  renderVoice();
+}
+
+function renderVoice() {
+  const shown = shownVoiceId(), def = VOICES.find((v) => v.id === shown), st = voice.per[shown];
+  $$('.voice-btn').forEach((b) => { const on = b.dataset.voice === voice.active; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('.unit-voice').classList.toggle('off', voice.active === 'off');
+  $('#voice-blurb').textContent = voice.active === 'off' ? `Pick a voice to transform how you sound. Knobs show ${def.name}.` : def.blurb;
+  $$('[data-vcheck]').forEach((c) => { c.checked = !!st[c.dataset.vcheck]; });
+  knobs.filter((k) => k.isVoice).forEach((k) => k.render());
+  const chip = $('#chip-voice');
+  chip.hidden = voice.active === 'off';
+  chip.textContent = def.name;
+}
+
+engine.on((ev) => { if (ev.type === 'tx') $('#tx-led').classList.toggle('on', ev.tx); });
 
 function renderControls() {
   knobs.forEach((k) => k.render());
@@ -405,6 +464,7 @@ $('#save-raw').addEventListener('click', async () => { const p = await bridge.sa
 /* hotkeys */
 bridge.onHotkey((a) => {
   if (a === 'mute') { engine.setMute(!engine.muted); toast(engine.muted ? 'Mic muted' : 'Mic live'); }
+  if (a === 'voice') { toggleVoice(); toast(voice.active === 'off' ? 'Voice changer off' : `Voice: ${VOICES.find((v) => v.id === voice.active).name}`); }
   if (a === 'bypass') { engine.setBypass(!engine.bypass); toast(engine.bypass ? 'Raw mic (bypassed)' : 'MicPRO processing'); }
 });
 async function applyHotkeys() {
@@ -430,6 +490,7 @@ function bindHotkeyInput(input, action) {
 }
 bindHotkeyInput($('#hk-mute'), 'mute');
 bindHotkeyInput($('#hk-bypass'), 'bypass');
+bindHotkeyInput($('#hk-voice'), 'voice');
 $('#opt-tray').checked = prefs.tray;
 $('#opt-tray').addEventListener('change', (e) => { prefs.tray = e.target.checked; savePrefs(); bridge.setCloseToTray(prefs.tray); });
 $('#opt-autostart').checked = prefs.autostart;
@@ -626,6 +687,7 @@ function renderFrame() {
 /* ------------------------------------------------------------------ */
 (async function boot() {
   renderControls(); renderPresets(); renderTransport();
+  onVoiceChanged();
   bridge.setCloseToTray(prefs.tray);
   applyHotkeys();
   bridge.version().then((v) => { $('#about').textContent = `MicPRO ${v}. Processing runs locally; nothing leaves your computer.`; });
@@ -642,4 +704,4 @@ function renderFrame() {
 })();
 
 // expose for debugging / tests
-window.__micpro = { engine, get settings() { return settings; }, loadPreset };
+window.__micpro = { engine, get settings() { return settings; }, loadPreset, setVoice, voice };

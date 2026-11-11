@@ -40,6 +40,8 @@ export class AudioEngine {
     this.deessGr = 0;
     this.listeners = new Set();
     this._recording = null;
+    this.voiceDsp = { enabled: false };
+    this.tx = false;
   }
 
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -131,6 +133,7 @@ export class AudioEngine {
     this.eqPres = bq('peaking', 4500, 1); this.eqAir = bq('highshelf', 10000);
     this.lpf = bq('lowpass', 20000, 0.707);
     this.deesser = wk('micpro-deesser');
+    this.voiceFx = wk('micpro-voice');
 
     this.satIn = g(); this.satDry = g(1); this.satWet = g(0);
     this.shaper = c.createWaveShaper(); this.shaper.oversample = '4x';
@@ -150,7 +153,7 @@ export class AudioEngine {
     for (let i = 0; i < chain.length - 1; i++) chain[i].connect(chain[i + 1]);
     this.satIn.connect(this.satDry).connect(this.satOut);
     this.satIn.connect(this.shaper).connect(this.satWet).connect(this.satOut);
-    this.satOut.connect(this.comp).connect(this.makeup).connect(this.trim).connect(this.limiter).connect(this.limiterComp).connect(this.processed).connect(this.outBus);
+    this.satOut.connect(this.comp).connect(this.makeup).connect(this.trim).connect(this.voiceFx).connect(this.limiter).connect(this.limiterComp).connect(this.processed).connect(this.outBus);
     this.inputGain.connect(this.bypassGain).connect(this.outBus);
     this.outBus.connect(this.muteGain).connect(c.destination);
 
@@ -173,6 +176,8 @@ export class AudioEngine {
     this.gate.port.onmessage = (e) => { this.gateState = e.data; };
     this.deesser.port.onmessage = (e) => { this.deessGr = e.data.gr; };
     this.denoise.port.onmessage = (e) => { if (e.data.type === 'learned') this.emit({ type: 'noise-learned' }); };
+    this.voiceFx.port.onmessage = (e) => { this.tx = !!e.data.tx; this.emit({ type: 'tx', tx: this.tx }); };
+    this.voiceFx.port.postMessage(this.voiceDsp);
 
     this._applyChannel();
     this._applyRouting();
@@ -195,6 +200,13 @@ export class AudioEngine {
     this.bypassGain.gain.setTargetAtTime(this.bypass ? 1 : 0, t, 0.015);
     this.muteGain.gain.setTargetAtTime(this.muted ? 0 : 1, t, 0.01);
     this.monitorGain.gain.setTargetAtTime(this.monitorOn ? this.monitorVolume : 0, t, 0.02);
+  }
+
+  /** Voice changer parameters (see voices.js voiceDsp). Kept separate from the mic preset. */
+  setVoice(dsp) {
+    this.voiceDsp = dsp || { enabled: false };
+    if (!this.voiceDsp.enabled) this.tx = false;
+    this.voiceFx?.port.postMessage(this.voiceDsp);
   }
 
   setBypass(on) { this.bypass = !!on; this._applyRouting(); this.emit({ type: 'state' }); }
