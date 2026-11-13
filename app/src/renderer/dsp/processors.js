@@ -342,6 +342,11 @@ class Biquad {
     let b0, b1, b2, a0, a1, a2;
     if (type === 'lp') { b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = b0; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }
     else if (type === 'hp') { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = b0; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }
+    else if (type === 'lowshelf') {
+      const sA = Math.sqrt(A), al = (sw / 2) * Math.SQRT2;
+      b0 = A * ((A + 1) - (A - 1) * cw + 2 * sA * al); b1 = 2 * A * ((A - 1) - (A + 1) * cw); b2 = A * ((A + 1) - (A - 1) * cw - 2 * sA * al);
+      a0 = (A + 1) + (A - 1) * cw + 2 * sA * al; a1 = -2 * ((A - 1) + (A + 1) * cw); a2 = (A + 1) + (A - 1) * cw - 2 * sA * al;
+    }
     else { b0 = 1 + alpha * A; b1 = -2 * cw; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cw; a2 = 1 - alpha / A; }
     this.b0 = b0 / a0; this.b1 = b1 / a0; this.b2 = b2 / a0; this.a1 = a1 / a0; this.a2 = a2 / a0;
   }
@@ -535,8 +540,246 @@ class VoiceFxProcessor extends AudioWorkletProcessor {
   }
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Pitch + formant shifter (TD-PSOLA)                                  */
+/* ------------------------------------------------------------------ */
+/*
+ * 1. YIN pitch tracking on a 4x decimated copy of the input.
+ * 2. Analysis marks are placed one pitch period apart and aligned by cross-correlation,
+ *    so every grain starts at the same point of the glottal cycle.
+ * 3. Two-period Hann grains are overlap-added at period / pitchRatio spacing -> new pitch.
+ * 4. Each grain is resampled by the formant factor while it is copied, which scales the
+ *    spectral envelope (vocal tract size) independently of the pitch.
+ * Unvoiced sound (s, f, breath) is passed through with fixed 6 ms grains so it isn't buzzed.
+ * Fixed latency: 36 ms.
+ */
+class PitchShiftProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.SIZE = 16384; this.M = this.SIZE - 1;
+    this.inBuf = new Float32Array(this.SIZE); this.outBuf = new Float32Array(this.SIZE);
+    this.inPos = 0; this.readPos = 0;
+    this.T0max = Math.round(sampleRate / 75);
+    this.ffMin = 0.7;
+    this.HmaxOut = Math.ceil(this.T0max / this.ffMin);
+    this.L = this.HmaxOut + Math.ceil(this.T0max * 1.7) + 128; // ~36 ms at 48 kHz
+    this.uvT = Math.round(0.006 * sampleRate);
+    // decimated detector
+    this.D = 4; this.dRate = sampleRate / this.D;
+    this.dSize = 4096; this.dM = this.dSize - 1; this.dBuf = new Float32Array(this.dSize); this.dPos = 0;
+    this.dAcc = 0; this.dN = 0; this.lp1 = 0; this.lp2 = 0;
+    this.W = Math.round(0.02 * this.dRate);
+    this.minLag = Math.floor(this.dRate / 480); this.maxLag = Math.ceil(this.dRate / 75);
+    this.win = new Float32Array(this.W + this.maxLag + 2);
+    this.d = new Float32Array(this.maxLag + 2);
+    this.hist = new Float32Array(1024); // T0 per 128-sample block of input time
+    this.sinceDetect = 0; this.lastCenterBlock = 0;
+    this.t0Med = [0, 0, 0];
+    this.synthPos = 0; this.anaMark = 0; this.lastVoiced = false;
+    this.p = { enabled: false, ratio: 1, formant: 1, gain: 1 };
+    this.active = false;
+    this.port.onmessage = (e) => {
+      Object.assign(this.p, e.data || {});
+      this.p.formant = Math.max(this.ffMin, Math.min(1.8, this.p.formant || 1));
+      this.p.ratio = Math.max(0.25, Math.min(4, this.p.ratio || 1));
+    };
+  }
+
+  t0At(t) {
+    const b = Math.min(t >> 7, this.lastCenterBlock);
+    return this.hist[b & 1023];
+  }
+
+  detect() {
+    const W = this.W, maxLag = this.maxLag, win = this.win, n = W + maxLag;
+    const base = this.dPos - n;
+    let e = 0;
+    for (let j = 0; j < n; j++) { const v = this.dBuf[(base + j) & this.dM]; win[j] = v; if (j < W) e += v * v; }
+    let T0 = 0;
+    if (Math.sqrt(e / W) > 0.004) { // about -48 dBFS: below that it's room noise, not voice
+      const d = this.d;
+      for (let tau = 1; tau <= maxLag; tau++) {
+        let s = 0;
+        for (let j = 0; j < W; j++) { const a = win[j] - win[j + tau]; s += a * a; }
+        d[tau] = s;
+      }
+      // cumulative mean normalised difference
+      let run = 0, best = -1, bestV = 1;
+      for (let tau = 1; tau <= maxLag; tau++) {
+        run += d[tau];
+        d[tau] = run > 0 ? (d[tau] * tau) / run : 1;
+      }
+      for (let tau = this.minLag; tau < maxLag; tau++) {
+        if (d[tau] < 0.15) {
+          while (tau + 1 < maxLag && d[tau + 1] < d[tau]) tau++;
+          best = tau; bestV = d[tau]; break;
+        }
+        if (d[tau] < bestV) { bestV = d[tau]; best = tau; }
+      }
+      if (best > 0 && bestV < 0.3) {
+        let tau = best;
+        if (tau > 1 && tau < maxLag) { // parabolic interpolation
+          const a = d[tau - 1], b = d[tau], c = d[tau + 1], den = a - 2 * b + c;
+          if (den > 1e-9) tau += (0.5 * (a - c)) / den;
+        }
+        T0 = tau * this.D;
+      }
+    }
+    // median of 3 removes single-frame octave errors
+    this.t0Med.shift(); this.t0Med.push(T0);
+    const [a, b, c] = this.t0Med;
+    const med = Math.max(Math.min(a, b), Math.min(Math.max(a, b), c));
+    // the analysis window is centred n/2 decimated samples in the past
+    const center = this.inPos - (n / 2) * this.D;
+    const cb = Math.max(0, center >> 7);
+    for (let blk = this.lastCenterBlock + 1; blk <= cb; blk++) this.hist[blk & 1023] = med;
+    this.lastCenterBlock = Math.max(this.lastCenterBlock, cb);
+  }
+
+  refine(prev, cand, T0) {
+    const R = Math.max(2, Math.round(T0 * 0.12)), half = Math.round(T0 * 0.5), buf = this.inBuf, M = this.M;
+    let best = cand, bestV = -Infinity;
+    for (let o = -R; o <= R; o++) {
+      let s = 0;
+      for (let j = -half; j < half; j += 2) s += buf[(prev + j) & M] * buf[(cand + o + j) & M];
+      if (s > bestV) { bestV = s; best = cand + o; }
+    }
+    return best;
+  }
+
+  addGrain(aC, sC, H, ff, scale) {
+    const Ho = Math.max(2, Math.floor(H / ff)), s0 = Math.round(sC), buf = this.inBuf, out = this.outBuf, M = this.M;
+    const k = Math.PI / Ho;
+    for (let j = -Ho; j <= Ho; j++) {
+      const w = (0.5 + 0.5 * Math.cos(k * j)) * scale;
+      const src = aC + j * ff, i0 = Math.floor(src), fr = src - i0;
+      const a = buf[i0 & M], b = buf[(i0 + 1) & M];
+      out[(s0 + j) & M] += w * (a + (b - a) * fr);
+    }
+    return Ho;
+  }
+
+  process(inputs, outputs) {
+    const input = inputs[0] && inputs[0][0];
+    const out = outputs[0][0];
+    const n = out.length;
+    const x = input || new Float32Array(n);
+    const p = this.p;
+
+    for (let i = 0; i < n; i++) {
+      const v = x[i];
+      this.inBuf[(this.inPos + i) & this.M] = v;
+      // 2x one-pole lowpass then decimate by 4 for the pitch detector
+      this.lp1 += 0.33 * (v - this.lp1); this.lp2 += 0.33 * (this.lp1 - this.lp2);
+      if (++this.dN === this.D) { this.dN = 0; this.dBuf[this.dPos & this.dM] = this.lp2; this.dPos++; }
+    }
+    this.inPos += n;
+    this.sinceDetect += n;
+    if (!p.enabled) {
+      // when disabled, the sub layer stays silent and the main layer passes through untouched
+      if (p.silentWhenOff) out.fill(0); else out.set(x);
+      this.active = false; this.readPos += n;
+      for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out);
+      return true;
+    }
+    if (this.sinceDetect >= 256) { this.sinceDetect = 0; this.detect(); }
+    if (!this.active) {
+      this.active = true; this.outBuf.fill(0);
+      this.synthPos = this.readPos + this.L; this.lastVoiced = false;
+    }
+
+    const ff = p.formant, r = p.ratio;
+    while (this.synthPos <= this.readPos + n + this.HmaxOut) {
+      const target = Math.round(this.synthPos - this.L);
+      let T0 = this.t0At(target);
+      let S, H;
+      if (T0 > 0) {
+        if (!this.lastVoiced) this.anaMark = target;
+        else {
+          let guard = 0;
+          while (this.anaMark + T0 * 0.5 < target && guard++ < 8) this.anaMark = this.refine(this.anaMark, this.anaMark + Math.round(T0), T0);
+          if (Math.abs(this.anaMark - target) > T0 * 1.5) this.anaMark = target;
+        }
+        S = T0 / r; H = T0;
+        this.lastVoiced = true;
+      } else {
+        this.anaMark = target; S = this.uvT; H = this.uvT; this.lastVoiced = false;
+      }
+      const Ho = Math.max(2, Math.floor(H / ff));
+      this.addGrain(this.anaMark, this.synthPos, H, ff, Math.min(1.5, S / Ho));
+      this.synthPos += S;
+    }
+
+    const g = p.gain;
+    for (let i = 0; i < n; i++) {
+      const idx = (this.readPos + i) & this.M;
+      out[i] = this.outBuf[idx] * g; this.outBuf[idx] = 0;
+    }
+    this.readPos += n;
+    for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out);
+    return true;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Blown-out mic ("ear rape")                                          */
+/* ------------------------------------------------------------------ */
+/* Bass-boosted, massively over-driven hard clipping with optional bit/rate crush.
+ * A voice-keyed gate keeps it silent between words so the noise floor isn't blown up too. */
+class LoudProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.p = { enabled: false, drive: 36, bass: 12, crunch: 0 };
+    this.hp = new Biquad(); this.shelf = new Biquad(); this.harsh = new Biquad(); this.post = new Biquad();
+    this.env = 0; this.floor = 0; this.blockMin = 1; this.minRing = new Float32Array(Math.ceil(sampleRate / 128)); this.minPos = 0;
+    this.open = false; this.hold = 0; this.g = 0; this.held = 0; this.cnt = 0;
+    this.configure({});
+    this.port.onmessage = (e) => this.configure(e.data || {});
+  }
+  configure(d) {
+    const p = Object.assign(this.p, d);
+    this.hp.set('hp', 45, 0.707);
+    this.shelf.set('lowshelf', 110, 0.707, p.bass);
+    this.harsh.set('peak', 2600, 0.9, 8);
+    this.post.set('hp', 25, 0.707);
+    this.driveLin = dbToLin(p.drive);
+    this.bitQ = p.crunch > 0 ? Math.pow(2, Math.max(3, Math.round(15 - p.crunch * 0.11)) - 1) : 0;
+    this.rateN = 1 + Math.floor((p.crunch || 0) / 34);
+    this.cA = timeCoef(0.6, sampleRate); this.cR = timeCoef(60, sampleRate);
+    this.gA = timeCoef(1, sampleRate); this.gR = timeCoef(50, sampleRate);
+    this.holdN = Math.round(0.18 * sampleRate);
+  }
+  process(inputs, outputs) {
+    const input = inputs[0] && inputs[0][0];
+    const out = outputs[0][0];
+    const p = this.p;
+    if (!input) { out.fill(0); return true; }
+    if (!p.enabled) { out.set(input); for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out); return true; }
+    this.minRing[this.minPos] = this.blockMin; this.minPos = (this.minPos + 1) % this.minRing.length; this.blockMin = 1;
+    let fl = 1; for (let k = 0; k < this.minRing.length; k++) if (this.minRing[k] < fl) fl = this.minRing[k];
+    const thr = Math.min(0.1, Math.max(dbToLin(-46), fl * 3.5));
+    for (let i = 0; i < out.length; i++) {
+      const x = input[i], ax = x < 0 ? -x : x;
+      this.env = ax > this.env ? this.cA * this.env + (1 - this.cA) * ax : this.cR * this.env + (1 - this.cR) * ax;
+      if (this.env < this.blockMin) this.blockMin = this.env;
+      if (this.env > thr) { this.open = true; this.hold = this.holdN; } else if (this.hold > 0) this.hold--; else this.open = false;
+      this.g = this.open ? this.gA * this.g + (1 - this.gA) : this.gR * this.g;
+      let v = this.harsh.run(this.shelf.run(this.hp.run(x))) * this.driveLin;
+      v = v > 0.92 ? 0.92 : v < -1 ? -1 : v; // asymmetric hard clip
+      if (this.bitQ) v = Math.round(v * this.bitQ) / this.bitQ;
+      if (this.rateN > 1) { if (this.cnt++ % this.rateN === 0) this.held = v; v = this.held; }
+      out[i] = this.post.run(v) * this.g;
+    }
+    for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out);
+    return true;
+  }
+}
+
 registerProcessor('micpro-denoise', DenoiseProcessor);
 registerProcessor('micpro-gate', GateProcessor);
 registerProcessor('micpro-deesser', DeesserProcessor);
 registerProcessor('micpro-recorder', RecorderProcessor);
 registerProcessor('micpro-voice', VoiceFxProcessor);
+registerProcessor('micpro-shift', PitchShiftProcessor);
+registerProcessor('micpro-loud', LoudProcessor);

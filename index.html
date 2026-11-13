@@ -106,6 +106,7 @@
     .voice h3 { font: 700 22px/1.15 var(--display); margin: 0 0 4px; }
     .voice .kind { color: var(--amber); font-size: 15px; margin: 0 0 10px; }
     .voice p { color: var(--muted); margin: 0; }
+    .voice-alt::before { display: none; }
 
     /* setup */
     .setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; counter-reset: st; list-style: none; padding: 0; margin: 0; }
@@ -240,14 +241,17 @@
   </section>
 
   <section class="wrap" id="voices">
-    <h2>Talk like you're on the radio.</h2>
-    <p class="section-lede">The voice changer acts like a real transmitter. Talking keys it up with a click, your voice goes out band-limited and overdriven over a bed of static, and letting go closes the channel with a squelch tail. It works live in Discord, in game and on stream.</p>
+    <h2>Become someone else on comms.</h2>
+    <p class="section-lede">Seven voices that work live in Discord, in game and on stream. The radios behave like real transmitters, keying up when you talk and closing with a squelch tail. Girl and God shift your pitch and the size of your vocal tract separately, so they sound like a different person instead of a sped-up tape.</p>
     <div class="voices">
       <article class="voice"><h3>Walkie-Talkie</h3><p class="kind">Handheld FM radio</p><p>The squad handheld: hard-compressed, crunchy, and the classic "kssh" when you stop talking.</p></article>
       <article class="voice"><h3>Tactical Comms</h3><p class="kind">Encrypted digital headset</p><p>Tight military intercom with a faint codec edge, a key-up chirp and a quick roger beep.</p></article>
       <article class="voice"><h3>Field Radio</h3><p class="kind">Long-range AM</p><p>Boxy and buried in static, with fading, a drifting whistle and the signal breaking up.</p></article>
+      <article class="voice voice-alt"><h3>Girl</h3><p class="kind">Female voice</p><p>Higher pitch and a smaller vocal tract, adjusted separately, so it reads as a different person.</p></article>
+      <article class="voice voice-alt"><h3>God</h3><p class="kind">Deep and colossal</p><p>Pitched down with a sub-octave rumble, echoing through an enormous hall.</p></article>
+      <article class="voice voice-alt"><h3>Blown Out</h3><p class="kind">Ear-rape mic</p><p>Bass-boosted and clipped to the ceiling. Silent between words, brutal when you talk.</p></article>
     </div>
-    <p class="more-presets">Dial in static, grit, interference and tail length per voice, and flip the voice changer on and off with a hotkey mid-raid.</p>
+    <p class="more-presets">Every voice has its own knobs (pitch, formant, reverb, static and more), and a hotkey flips the voice changer on and off mid-raid.</p>
   </section>
 
   <section class="wrap" id="setup">
@@ -263,7 +267,7 @@
   <section class="download" id="download">
     <div class="wrap">
       <h2>Download MicPRO</h2>
-      <p class="section-lede">Version 1.1 with the voice changer. Free and open source under the MIT license.</p>
+      <p class="section-lede">Version 1.2 with seven voices. Free and open source under the MIT license.</p>
       <div class="dl-grid">
         <a class="dl" data-os="win" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-Setup.exe"><b>Windows</b><span>Windows 10 and 11, 64-bit installer</span><em>MicPRO-Setup.exe</em></a>
         <a class="dl" data-os="mac" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-mac.dmg"><b>macOS</b><span>Apple silicon and Intel</span><em>MicPRO-mac.dmg</em></a>

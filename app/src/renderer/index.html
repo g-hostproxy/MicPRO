@@ -125,16 +125,9 @@
           <header><h3>Voice changer</h3><span class="tx" id="tx-led" title="Lights while you're transmitting">TX</span><em id="voice-blurb"></em></header>
           <div class="voice-body">
             <div class="voice-list" id="voice-list" role="radiogroup" aria-label="Voice"></div>
-            <div class="knobs voice-knobs">
-              <div class="knob" data-root="voice" data-path="static" data-min="0" data-max="100" data-step="1" data-unit="%" data-label="Static"></div>
-              <div class="knob" data-root="voice" data-path="grit" data-min="0" data-max="100" data-step="1" data-unit="%" data-label="Grit"></div>
-              <div class="knob" data-root="voice" data-path="interference" data-min="0" data-max="100" data-step="1" data-unit="%" data-label="Interference"></div>
-              <div class="knob" data-root="voice" data-path="tail" data-min="30" data-max="500" data-step="5" data-unit="ms" data-label="Tail length"></div>
-              <div class="knob" data-root="voice" data-path="level" data-min="-12" data-max="12" data-step="0.5" data-unit="dB" data-label="Level"></div>
-            </div>
+            <div class="knobs voice-knobs" id="voice-knobs"></div>
             <div class="voice-opts">
-              <label class="check"><input type="checkbox" data-vcheck="squelch" /><span>Squelch tail</span></label>
-              <label class="check"><input type="checkbox" data-vcheck="beep" /><span>Roger beep</span></label>
+              <div class="voice-toggles" id="voice-toggles"></div>
               <button class="btn-mini" id="btn-voice-reset">Reset voice</button>
             </div>
           </div>

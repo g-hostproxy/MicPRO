@@ -105,6 +105,8 @@ function formatVal(v, unit, scale = 1) {
   if (unit === '%') return `${Math.round(x)}%`;
   if (unit === 'dB+') return `${Math.round(x * 10) / 10} dB`;
   if (unit === 'dB') return `${x > 0 ? '+' : ''}${(Math.abs(x) < 10 && x % 1 ? x.toFixed(1) : Math.round(x * 10) / 10)} dB`;
+  if (unit === 'st') return `${x > 0 ? '+' : ''}${x.toFixed(1)} st`;
+  if (unit === 's') return `${x.toFixed(1)} s`;
   if (unit === 'ms') return `${x < 10 ? x.toFixed(1) : Math.round(x)} ms`;
   return `${x}`;
 }
@@ -186,12 +188,38 @@ for (const def of [{ id: 'off', name: 'Off', tag: 'Your real voice' }, ...VOICES
   b.addEventListener('click', () => setVoice(def.id));
   voiceList.appendChild(b);
 }
-$$('[data-vcheck]').forEach((c) => c.addEventListener('change', () => { voice.per[shownVoiceId()][c.dataset.vcheck] = c.checked; onVoiceChanged(); }));
 $('#btn-voice-reset').addEventListener('click', () => {
   const id = shownVoiceId(); voice.per[id] = voiceDefaults(id); onVoiceChanged();
 });
 
+let builtFor = null;
+function buildVoiceControls(def) {
+  for (let i = knobs.length - 1; i >= 0; i--) if (knobs[i].isVoice) knobs.splice(i, 1);
+  const wrap = $('#voice-knobs'); wrap.innerHTML = '';
+  for (const c of def.controls) {
+    const el = document.createElement('div');
+    el.className = 'knob';
+    Object.assign(el.dataset, { root: 'voice', path: c.path, min: c.min, max: c.max, step: c.step, unit: c.unit, label: c.label });
+    wrap.appendChild(el); makeKnob(el);
+  }
+  const tg = $('#voice-toggles'); tg.innerHTML = '';
+  for (const t of def.toggles) {
+    const l = document.createElement('label'); l.className = 'check';
+    l.innerHTML = '<input type="checkbox" /><span></span>';
+    $('span', l).textContent = t.label;
+    const box = $('input', l); box.dataset.vcheck = t.path;
+    box.addEventListener('change', () => { voice.per[shownVoiceId()][t.path] = box.checked; onVoiceChanged(); });
+    tg.appendChild(l);
+  }
+  builtFor = def.id;
+}
+
+let warnedLoud = store.get('warnedLoud', false);
 function setVoice(id) {
+  if (id === 'loud' && !warnedLoud) {
+    warnedLoud = true; store.set('warnedLoud', true);
+    toast('Blown Out is extremely loud for listeners. Your headphone monitor is turned down 12 dB while it\'s on.', false, 6500);
+  }
   voice.active = id;
   if (id !== 'off') voice.last = id;
   onVoiceChanged();
@@ -199,13 +227,15 @@ function setVoice(id) {
 function toggleVoice() { setVoice(voice.active === 'off' ? voice.last : 'off'); }
 
 function onVoiceChanged() {
-  engine.setVoice(voice.active === 'off' ? { enabled: false } : voiceDsp(voice.per[voice.active]));
+  engine.setVoice(voice.active === 'off' ? {} : voiceDsp(voice.per[voice.active]));
   store.set('voice', voice);
   renderVoice();
 }
 
 function renderVoice() {
   const shown = shownVoiceId(), def = VOICES.find((v) => v.id === shown), st = voice.per[shown];
+  if (builtFor !== shown) buildVoiceControls(def);
+  $('#tx-led').hidden = !def.toggles.some((t) => t.path === 'squelch');
   $$('.voice-btn').forEach((b) => { const on = b.dataset.voice === voice.active; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   $('.unit-voice').classList.toggle('off', voice.active === 'off');
   $('#voice-blurb').textContent = voice.active === 'off' ? `Pick a voice to transform how you sound. Knobs show ${def.name}.` : def.blurb;

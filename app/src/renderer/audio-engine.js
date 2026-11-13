@@ -40,7 +40,8 @@ export class AudioEngine {
     this.deessGr = 0;
     this.listeners = new Set();
     this._recording = null;
-    this.voiceDsp = { enabled: false };
+    this.voiceDsp = {};
+    this.monitorSafety = 1;
     this.tx = false;
   }
 
@@ -133,7 +134,13 @@ export class AudioEngine {
     this.eqPres = bq('peaking', 4500, 1); this.eqAir = bq('highshelf', 10000);
     this.lpf = bq('lowpass', 20000, 0.707);
     this.deesser = wk('micpro-deesser');
+    // voice changer rack
+    this.shiftMain = wk('micpro-shift'); this.shiftSub = wk('micpro-shift'); this.subGain = g(0);
+    this.vHp = bq('highpass', 20, 0.707); this.vLow = bq('lowshelf', 150); this.vHigh = bq('highshelf', 6000);
+    this.loud = wk('micpro-loud');
     this.voiceFx = wk('micpro-voice');
+    this.revDry = g(1); this.conv = c.createConvolver(); this.conv.normalize = false; this.revWet = g(0); this.revSum = g(1);
+    this.voiceOut = g(1);
 
     this.satIn = g(); this.satDry = g(1); this.satWet = g(0);
     this.shaper = c.createWaveShaper(); this.shaper.oversample = '4x';
@@ -153,7 +160,13 @@ export class AudioEngine {
     for (let i = 0; i < chain.length - 1; i++) chain[i].connect(chain[i + 1]);
     this.satIn.connect(this.satDry).connect(this.satOut);
     this.satIn.connect(this.shaper).connect(this.satWet).connect(this.satOut);
-    this.satOut.connect(this.comp).connect(this.makeup).connect(this.trim).connect(this.voiceFx).connect(this.limiter).connect(this.limiterComp).connect(this.processed).connect(this.outBus);
+    this.satOut.connect(this.comp).connect(this.makeup).connect(this.trim);
+    this.trim.connect(this.shiftMain).connect(this.vHp);
+    this.trim.connect(this.shiftSub).connect(this.subGain).connect(this.vHp);
+    this.vHp.connect(this.vLow).connect(this.vHigh).connect(this.loud).connect(this.voiceFx);
+    this.voiceFx.connect(this.revDry).connect(this.revSum);
+    this.voiceFx.connect(this.conv).connect(this.revWet).connect(this.revSum);
+    this.revSum.connect(this.voiceOut).connect(this.limiter).connect(this.limiterComp).connect(this.processed).connect(this.outBus);
     this.inputGain.connect(this.bypassGain).connect(this.outBus);
     this.outBus.connect(this.muteGain).connect(c.destination);
 
@@ -177,7 +190,9 @@ export class AudioEngine {
     this.deesser.port.onmessage = (e) => { this.deessGr = e.data.gr; };
     this.denoise.port.onmessage = (e) => { if (e.data.type === 'learned') this.emit({ type: 'noise-learned' }); };
     this.voiceFx.port.onmessage = (e) => { this.tx = !!e.data.tx; this.emit({ type: 'tx', tx: this.tx }); };
-    this.voiceFx.port.postMessage(this.voiceDsp);
+    this.shiftSub.port.postMessage({ silentWhenOff: true });
+    this._irKey = '';
+    this._applyVoice();
 
     this._applyChannel();
     this._applyRouting();
@@ -199,14 +214,64 @@ export class AudioEngine {
     this.processed.gain.setTargetAtTime(this.bypass ? 0 : 1, t, 0.015);
     this.bypassGain.gain.setTargetAtTime(this.bypass ? 1 : 0, t, 0.015);
     this.muteGain.gain.setTargetAtTime(this.muted ? 0 : 1, t, 0.01);
-    this.monitorGain.gain.setTargetAtTime(this.monitorOn ? this.monitorVolume : 0, t, 0.02);
+    this.monitorGain.gain.setTargetAtTime(this.monitorOn ? this.monitorVolume * this.monitorSafety : 0, t, 0.02);
   }
 
   /** Voice changer parameters (see voices.js voiceDsp). Kept separate from the mic preset. */
   setVoice(dsp) {
-    this.voiceDsp = dsp || { enabled: false };
-    if (!this.voiceDsp.enabled) this.tx = false;
-    this.voiceFx?.port.postMessage(this.voiceDsp);
+    this.voiceDsp = dsp || {};
+    if (!this.voiceDsp.radio?.enabled) { this.tx = false; this.emit({ type: 'tx', tx: false }); }
+    this.monitorSafety = this.voiceDsp.monitorSafety ?? 1;
+    this._applyVoice();
+    this._applyRouting();
+  }
+
+  _applyVoice() {
+    if (!this.ctx || !this.voiceFx) return;
+    const v = this.voiceDsp, t = this.ctx.currentTime, k = 0.03;
+    const off = { enabled: false };
+    this.shiftMain.port.postMessage(v.shift || off);
+    this.shiftSub.port.postMessage(v.sub || off);
+    this.subGain.gain.setTargetAtTime(v.sub?.enabled ? v.sub.mix : 0, t, k);
+    const eq = v.eq || {};
+    this.vHp.frequency.setTargetAtTime(eq.hp || 20, t, k);
+    this.vLow.frequency.setTargetAtTime(eq.lowFreq || 150, t, k); this.vLow.gain.setTargetAtTime(eq.lowGain || 0, t, k);
+    this.vHigh.frequency.setTargetAtTime(eq.highFreq || 6000, t, k); this.vHigh.gain.setTargetAtTime(eq.highGain || 0, t, k);
+    this.loud.port.postMessage(v.loud || off);
+    this.voiceFx.port.postMessage(v.radio || off);
+    const rv = v.reverb;
+    if (rv && rv.mix > 0) {
+      const key = `${rv.size.toFixed(1)}|${rv.predelay}|${rv.damp}`;
+      if (key !== this._irKey) { this._irKey = key; this.conv.buffer = this._makeIR(rv.size, rv.predelay, rv.damp); }
+      this.revWet.gain.setTargetAtTime(rv.mix, t, k);
+      this.revDry.gain.setTargetAtTime(rv.dry ?? 1, t, k);
+    } else {
+      this.revWet.gain.setTargetAtTime(0, t, k);
+      this.revDry.gain.setTargetAtTime(1, t, k);
+    }
+    this.voiceOut.gain.setTargetAtTime(dbToLin(v.level || 0), t, k);
+  }
+
+  /** Synthetic hall: early reflections + exponentially decaying noise that darkens as it fades. */
+  _makeIR(seconds, predelay = 0.04, damp = 0.6) {
+    const sr = this.ctx.sampleRate, pd = Math.round(predelay * sr), len = pd + Math.round(seconds * 1.1 * sr);
+    const buf = this.ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    let seed = 12345, lp = 0;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 1073741823.5) - 1;
+    for (let i = pd; i < len; i++) {
+      const tt = (i - pd) / sr;
+      const decay = Math.pow(10, (-3 * tt) / seconds);
+      const a = Math.min(0.94, 0.15 + damp * 0.8 * (tt / seconds));
+      lp = a * lp + (1 - a) * rnd();
+      d[i] = lp * decay * Math.min(1, tt / 0.012);
+    }
+    for (const [ms, gain] of [[11, 0.6], [19, -0.45], [27, 0.4], [38, -0.32], [53, 0.26], [71, 0.2]]) {
+      const i = pd + Math.round((ms / 1000) * sr); if (i < len) d[i] += gain * 0.25;
+    }
+    let e = 0; for (let i = 0; i < len; i++) e += d[i] * d[i];
+    const norm = 1 / Math.sqrt(e || 1);
+    for (let i = 0; i < len; i++) d[i] *= norm;
+    return buf;
   }
 
   setBypass(on) { this.bypass = !!on; this._applyRouting(); this.emit({ type: 'state' }); }
