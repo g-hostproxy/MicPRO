@@ -123,7 +123,7 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 ipcMain.handle('hotkeys:set', (_e, map) => registerHotkeys(map));
 ipcMain.handle('app:close-to-tray', (_e, v) => { closeToTray = !!v; });
 ipcMain.handle('app:version', () => app.getVersion());
-// Store (MSIX) builds can't register login items; Windows manages their startup task instead.
+// Store (MSIX) builds can't register login items, so the option is hidden there.
 ipcMain.handle('app:login-item:get', () => (process.windowsStore ? null : app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin));
 ipcMain.handle('app:login-item:set', (_e, on) => {
   app.setLoginItemSettings({ openAtLogin: !!on, openAsHidden: true, args: ['--hidden'] });

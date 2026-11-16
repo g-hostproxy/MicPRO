@@ -95,8 +95,10 @@
         "runFullTrust",
         "microphone"
       ],
-      "addAutoLaunchExtension": true,
-      "artifactName": "MicPRO-Store.${ext}"
+      "addAutoLaunchExtension": false,
+      "artifactName": "MicPRO-Store.${ext}",
+      "minVersion": "10.0.17763.0",
+      "maxVersionTested": "10.0.26100.0"
     }
   }
 }

@@ -593,12 +593,7 @@ $('#opt-autostart').checked = prefs.autostart;
 $('#opt-autostart').addEventListener('change', (e) => { prefs.autostart = e.target.checked; savePrefs(); });
 if (bridge.getLoginItem && bridge.platform !== 'linux') {
   bridge.getLoginItem().then((on) => {
-    if (on === null) { // Microsoft Store version
-      const l = $('#opt-login').closest('label');
-      l.querySelector('input').hidden = true;
-      l.querySelector('span').textContent = 'To open MicPRO when you sign in, turn it on in Windows Settings > Apps > Startup.';
-      return;
-    }
+    if (on === null) { $('#opt-login').closest('label').hidden = true; return; } // Microsoft Store version
     $('#opt-login').checked = !!on;
   });
   $('#opt-login').addEventListener('change', (e) => bridge.setLoginItem(e.target.checked));
