@@ -126,7 +126,8 @@
     details p { color: var(--muted); margin: 12px 0 2px; }
 
     .download { background: var(--panel); border-top: 1px solid #262a20; border-bottom: 1px solid #262a20; }
-    .dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    #get .dl { max-width: 520px; }
+    .store-link.soon { opacity: 0.75; cursor: default; }
     .dl { display: flex; flex-direction: column; gap: 6px; padding: 24px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); text-decoration: none; }
     .dl:hover { border-color: var(--amber-deep); }
     .dl.rec { border-color: var(--amber); }
@@ -142,7 +143,7 @@
       .chain { grid-template-columns: 1fr 1fr; }
       .chain li { border-bottom: 1px solid var(--line); }
       .chain li::after { display: none; }
-      .presets, .setup, .dl-grid, .voices { grid-template-columns: 1fr; }
+      .presets, .setup, .voices { grid-template-columns: 1fr; }
       nav .links { display: none; }
       nav .btn { margin-left: auto; }
     }
@@ -160,9 +161,8 @@
         <a href="#voices">Voice changer</a>
         <a href="#setup">Setup</a>
         <a href="#faq">FAQ</a>
-        <a href="https://github.com/g-hostproxy/MicPRO">GitHub</a>
       </div>
-      <a class="btn btn-primary" href="#download">Download</a>
+      <a class="btn btn-primary store-link" href="#get">Get MicPRO</a>
     </div>
   </nav>
 
@@ -171,13 +171,13 @@
       <h1>Make the mic you own sound like a studio.</h1>
       <p class="lede">MicPRO cleans your voice in real time before it reaches OBS, Discord or the game. Fans and keyboard noise drop out, harsh "s" sounds soften, and every callout lands at the same level. Tuned presets for the Shure SM7B and Logitech G Pro X are built in.</p>
       <div class="cta">
-        <a class="btn btn-primary" id="hero-dl" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-Setup.exe">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Download for Windows</span>
+        <a class="btn btn-primary store-link store-cta" href="#get">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4.5v7H3zM11.5 4.4 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.4z" fill="currentColor"/></svg>
+          <span>Get it on the Microsoft Store</span>
         </a>
         <a class="btn" href="#how">See what it does</a>
       </div>
-      <p class="alt-dl">Free and open source. Also on <a href="#download">macOS and Linux</a>. Everything runs on your PC; no account, no cloud.</p>
+      <p class="alt-dl">For Windows 10 and 11. Everything runs on your PC: no account, no cloud.</p>
     </div>
     <div>
       <div class="scope" id="scope" role="slider" tabindex="0" aria-label="Compare raw mic and MicPRO" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
@@ -249,7 +249,7 @@
       <article class="voice"><h3>Field Radio</h3><p class="kind">Long-range AM</p><p>Boxy and buried in static, with fading, a drifting whistle and the signal breaking up.</p></article>
       <article class="voice voice-alt"><h3>Girl</h3><p class="kind">Female voice</p><p>Higher pitch and a smaller vocal tract, adjusted separately, so it reads as a different person.</p></article>
       <article class="voice voice-alt"><h3>God</h3><p class="kind">Deep and colossal</p><p>Pitched down with a sub-octave rumble, echoing through an enormous hall.</p></article>
-      <article class="voice voice-alt"><h3>Blown Out</h3><p class="kind">Ear-rape mic</p><p>Bass-boosted and clipped to the ceiling. Silent between words, brutal when you talk.</p></article>
+      <article class="voice voice-alt"><h3>Blown Out</h3><p class="kind">Max-distortion mic</p><p>Bass-boosted and clipped to the ceiling. Silent between words, brutal when you talk.</p></article>
     </div>
     <p class="more-presets">Every voice has its own knobs (pitch, formant, reverb, static and more), and a hotkey flips the voice changer on and off mid-raid.</p>
   </section>
@@ -258,22 +258,22 @@
     <h2>Set up in three steps.</h2>
     <p class="section-lede">MicPRO sends its clean audio to a virtual cable. Your apps listen to that cable instead of the raw mic.</p>
     <ol class="setup">
-      <li><h3>Install MicPRO and VB-CABLE</h3><p>Grab MicPRO below and the free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> driver. Restart your PC once.</p></li>
+      <li><h3>Install MicPRO and VB-CABLE</h3><p>Get MicPRO from the Microsoft Store and the free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> driver. Restart your PC once.</p></li>
       <li><h3>Route it</h3><p>In MicPRO, send clean audio to <code>CABLE Input</code>. In OBS, Discord or Tarkov, choose <code>CABLE Output</code> as your microphone.</p></li>
       <li><h3>Pick a preset and record</h3><p>Choose your mic, press Auto-set gain and talk for five seconds. Record a test take to hear raw and processed back to back.</p></li>
     </ol>
   </section>
 
-  <section class="download" id="download">
+  <section class="download" id="get">
     <div class="wrap">
-      <h2>Download MicPRO</h2>
-      <p class="section-lede">Version 1.3: lower-latency monitoring, and it remembers your devices. Free and open source under the MIT license.</p>
-      <div class="dl-grid">
-        <a class="dl" data-os="win" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-Setup.exe"><b>Windows</b><span>Windows 10 and 11, 64-bit installer</span><em>MicPRO-Setup.exe</em></a>
-        <a class="dl" data-os="mac" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-mac.dmg"><b>macOS</b><span>Apple silicon and Intel</span><em>MicPRO-mac.dmg</em></a>
-        <a class="dl" data-os="linux" href="https://github.com/g-hostproxy/MicPRO/releases/latest/download/MicPRO-linux.AppImage"><b>Linux</b><span>AppImage, most distributions</span><em>MicPRO-linux.AppImage</em></a>
-      </div>
-      <p class="alt-dl">Windows may show a SmartScreen notice because the installer isn't code-signed yet. Choose More info, then Run anyway. All builds are on the <a href="https://github.com/g-hostproxy/MicPRO/releases">releases page</a>.</p>
+      <h2>Get MicPRO</h2>
+      <p class="section-lede">Available on the Microsoft Store for Windows 10 and 11. Installs in one click, updates automatically, and no SmartScreen warnings.</p>
+      <a class="dl rec store-link" href="#get">
+        <b>Microsoft Store</b>
+        <span>Windows 10 (1809 or later) and Windows 11, 64-bit</span>
+        <em class="store-cta-text">Get it on the Microsoft Store</em>
+      </a>
+      <p class="alt-dl">To send MicPRO's voice into Discord, OBS and games, also install the free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> virtual audio driver.</p>
     </div>
   </section>
 
@@ -290,21 +290,20 @@
   <footer>
     <div class="wrap">
       <span>MicPRO is an independent project and is not affiliated with Shure, Logitech or Battlestate Games.</span>
-      <span><a href="privacy.html">Privacy</a> &nbsp; <a href="https://github.com/g-hostproxy/MicPRO">Source on GitHub</a></span>
+      <a href="privacy.html">Privacy</a>
     </div>
   </footer>
 
   <script>
-    // Highlight the visitor's platform.
+    // Microsoft Store link. Paste the URL from Partner Center (Product identity > Store URL),
+    // e.g. 'https://apps.microsoft.com/detail/9XXXXXXXXXXX'. Empty = "coming soon".
+    const STORE_URL = '';
     (function () {
-      const ua = navigator.userAgent;
-      const os = /Mac/i.test(ua) ? 'mac' : /Linux/i.test(ua) && !/Android/i.test(ua) ? 'linux' : 'win';
-      const card = document.querySelector(`.dl[data-os="${os}"]`);
-      if (card) card.classList.add('rec');
-      if (os !== 'win') {
-        const hero = document.getElementById('hero-dl');
-        hero.href = card.href;
-        hero.querySelector('span').textContent = os === 'mac' ? 'Download for macOS' : 'Download for Linux';
+      for (const a of document.querySelectorAll('.store-link')) {
+        if (STORE_URL) { a.href = STORE_URL; a.target = '_blank'; a.rel = 'noopener'; continue; }
+        a.classList.add('soon');
+        if (a.classList.contains('store-cta')) a.querySelector('span').textContent = 'Coming soon to the Microsoft Store';
+        const t = a.querySelector('.store-cta-text'); if (t) t.textContent = 'Coming soon';
       }
     })();
 

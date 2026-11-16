@@ -32,4 +32,4 @@ Uninstalling MicPRO removes the app and its settings. Recordings you saved stay 
 
 ## Contact
 
-Questions about this policy: open an issue at https://github.com/g-hostproxy/MicPRO/issues
+Questions about this policy: use the support contact on MicPRO's Microsoft Store page.

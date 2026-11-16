@@ -1,11 +1,8 @@
-name: Build and release
+name: Build test installers
 
-# Runs whenever the app version in app/package.json changes on main (or by hand from the Actions tab).
-# electron-builder creates the matching vX.Y.Z GitHub release and uploads the installers to it.
+# MicPRO is sold through the Microsoft Store, so this no longer publishes public releases.
+# Run it by hand from the Actions tab to get test installers as run artifacts.
 on:
-  push:
-    branches: [main]
-    paths: ['app/package.json', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
@@ -27,8 +24,16 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - name: Build installers and upload to the GitHub release
-        run: npx electron-builder --publish always
+      - name: Build test installers
+        run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MicPRO-test-${{ matrix.os }}
+          path: |
+            app/dist/*.exe
+            app/dist/*.dmg
+            app/dist/*.AppImage
+          if-no-files-found: ignore

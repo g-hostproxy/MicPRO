@@ -1,7 +1,5 @@
 # MicPRO
 
-[![Total downloads](https://img.shields.io/github/downloads/g-hostproxy/MicPRO/total?label=downloads&color=ffb23e&style=for-the-badge)](https://github.com/g-hostproxy/MicPRO/releases)
-[![Latest release](https://img.shields.io/github/v/release/g-hostproxy/MicPRO?label=latest&color=a5e35c&style=for-the-badge)](https://github.com/g-hostproxy/MicPRO/releases/latest)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/g.hostproxy)
 
 Real-time microphone enhancement for streamers and video creators. MicPRO sits between your mic and OBS / Discord / the game and runs your voice through a broadcast-style chain:
@@ -51,7 +49,7 @@ npm run dist:win   # build an installer into app/dist
 
 ## Releases
 
-Bump `version` in `app/package.json` and push to `main`. `.github/workflows/release.yml` builds Windows, macOS and Linux installers and publishes them as the matching `vX.Y.Z` GitHub release. You can also run it by hand from the Actions tab. The download buttons on the website point at `releases/latest`, so they update automatically.
+MicPRO is sold on the Microsoft Store (see `STORE.md`). To ship an update, bump `version` in `app/package.json`, run the **Build Microsoft Store package** workflow, and upload the new `.appx` in Partner Center. The **Build test installers** workflow builds unsigned test installers as run artifacts; it doesn't publish anything.
 
 ## Microsoft Store
 
@@ -59,7 +57,7 @@ Bump `version` in `app/package.json` and push to `main`. `.github/workflows/rele
 
 ## Website
 
-`index.html` at the repo root is the download page. Serve it with GitHub Pages (Settings → Pages → Deploy from branch → `main` / root).
+`index.html` (with `privacy.html` and `assets/`) is the product page. Set `STORE_URL` near the bottom of `index.html` once the Store listing is live. GitHub Pages can serve it from this repo only while the repo is public or on a paid GitHub plan; otherwise host those files from a separate public repo.
 
 ## Project layout
 
@@ -77,10 +75,10 @@ app/
     dsp/processors.js      AudioWorklet DSP: denoise, gate, de-esser, radio voice, recorder
 ```
 
-MIT licensed. Not affiliated with Shure, Logitech or Battlestate Games.
+Proprietary. All rights reserved (see `LICENSE`). Not affiliated with Shure, Logitech or Battlestate Games.
 
 ## Support MicPRO
 
-MicPRO is free and open source. If it made your mic sound better, you can support development here:
+If MicPRO made your mic sound better, you can support development here:
 
 <a href="https://buymeacoffee.com/g.hostproxy"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" height="40"></a>

@@ -32,9 +32,9 @@ You don't need a code-signing certificate, because Microsoft signs Store package
 
 ### Properties
 - **Category:** Music (secondary: Utilities & tools)
-- **Privacy policy URL:** `https://g-hostproxy.github.io/MicPRO/privacy.html` (needs GitHub Pages on), or `https://github.com/g-hostproxy/MicPRO/blob/main/PRIVACY.md`
-- **Website:** `https://github.com/g-hostproxy/MicPRO`
-- **Support contact:** `https://github.com/g-hostproxy/MicPRO/issues`
+- **Privacy policy URL:** the public address of `privacy.html` (for example `https://g-hostproxy.github.io/MicPRO/privacy.html`). It must stay reachable after the repo goes private; see "Going Store-only" below.
+- **Website:** the public address of `index.html`.
+- **Support contact:** an email address you're happy to show publicly. The privacy policy tells people to use this contact.
 - **System requirements:** Microphone required. Hardware: x64.
 
 ### Age ratings
@@ -100,6 +100,20 @@ Paste this:
 ## 5. Submit
 
 Select **Submit for certification**. Reviews usually take a few business days. If Microsoft asks about the VB-CABLE dependency, point to the certification notes above: MicPRO does not install or bundle the driver.
+
+## Going Store-only (private code)
+
+Do these in order, so there's never a moment with no way to get MicPRO:
+
+1. **Wait until the Store listing is live.** In Partner Center, under Product identity, copy the **Store URL** (`https://apps.microsoft.com/detail/...`).
+2. **Set the Store link on the website:** put that URL in `STORE_URL` near the bottom of `index.html` and push. Every Get MicPRO button then opens the Store.
+3. **Keep the website public.** GitHub Pages doesn't serve private repos on a free GitHub plan. Either:
+   - create a small public repo (for example `micpro-site`) with `index.html`, `privacy.html` and `assets/`, and turn on Pages there, or
+   - upgrade to GitHub Pro, which keeps Pages working from this private repo.
+   If the site's address changes, update the privacy policy URL and website in Partner Center.
+4. **Make this repo private:** GitHub → MicPRO → Settings → General → Danger Zone → Change visibility → Private. The old free releases (v1.0–v1.3.1) stop being downloadable from GitHub at the same moment.
+
+Free installers are no longer published: the release workflow now only builds test installers on demand.
 
 ## Updating later
 

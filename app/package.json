@@ -5,8 +5,8 @@
   "description": "Real-time microphone enhancement for streamers and creators: denoise, gate, EQ, de-esser, compressor and limiter with presets for the Shure SM7B and Logitech G Pro X.",
   "main": "src/main/main.js",
   "author": "MicPRO",
-  "license": "MIT",
-  "homepage": "https://github.com/g-hostproxy/MicPRO",
+  "license": "UNLICENSED",
+  "homepage": "https://g-hostproxy.github.io/MicPRO/",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
@@ -100,5 +100,6 @@
       "minVersion": "10.0.17763.0",
       "maxVersionTested": "10.0.26100.0"
     }
-  }
+  },
+  "private": true
 }

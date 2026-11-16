@@ -145,7 +145,7 @@ export const VOICES = [
   {
     id: 'loud',
     name: 'Blown Out',
-    tag: 'Ear-rape mic',
+    tag: 'Max-distortion mic',
     blurb: 'Your mic, destroyed: bass-boosted, clipped to the ceiling and crunchy. It stays silent between words. Your headphone monitor drops 12 dB while it\'s on to protect your ears.',
     controls: [
       { path: 'loudness', label: 'Loudness', min: 0, max: 100, step: 1, unit: '%' },
