@@ -1,5 +1,9 @@
 # MicPRO
 
+[![Total downloads](https://img.shields.io/github/downloads/g-hostproxy/MicPRO/total?label=downloads&color=ffb23e&style=for-the-badge)](https://github.com/g-hostproxy/MicPRO/releases)
+[![Latest release](https://img.shields.io/github/v/release/g-hostproxy/MicPRO?label=latest&color=a5e35c&style=for-the-badge)](https://github.com/g-hostproxy/MicPRO/releases/latest)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/g.hostproxy)
+
 Real-time microphone enhancement for streamers and video creators. MicPRO sits between your mic and OBS / Discord / the game and runs your voice through a broadcast-style chain:
 
 **Denoise → Gate → Tone EQ → De-esser → Warmth → Compressor → Limiter**
@@ -70,3 +74,9 @@ app/
 ```
 
 MIT licensed. Not affiliated with Shure, Logitech or Battlestate Games.
+
+## Support MicPRO
+
+MicPRO is free and open source. If it made your mic sound better, you can support development here:
+
+<a href="https://buymeacoffee.com/g.hostproxy"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" height="40"></a>
