@@ -1,0 +1,45 @@
+name: Build Microsoft Store package
+
+# Run from the Actions tab ("Run workflow"). Paste the three values from
+# Partner Center > your app > Product management > Product identity.
+# The resulting .appx is attached to the run as an artifact: download it and
+# upload it to your Partner Center submission (Packages page).
+on:
+  workflow_dispatch:
+    inputs:
+      identity_name:
+        description: 'Package/Identity/Name (e.g. 12345YourName.MicPRO)'
+        required: true
+      publisher:
+        description: 'Package/Identity/Publisher (e.g. CN=ABCD1234-...)'
+        required: true
+      publisher_display_name:
+        description: 'Package/Properties/PublisherDisplayName'
+        required: true
+
+jobs:
+  appx:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Build Store package
+        shell: bash
+        run: >
+          npx electron-builder --win appx --x64 --publish never
+          "-c.appx.identityName=${{ inputs.identity_name }}"
+          "-c.appx.publisher=${{ inputs.publisher }}"
+          "-c.appx.publisherDisplayName=${{ inputs.publisher_display_name }}"
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MicPRO-Store-package
+          path: app/dist/*.appx
+          if-no-files-found: error

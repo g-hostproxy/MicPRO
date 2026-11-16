@@ -592,7 +592,15 @@ $('#opt-tray').addEventListener('change', (e) => { prefs.tray = e.target.checked
 $('#opt-autostart').checked = prefs.autostart;
 $('#opt-autostart').addEventListener('change', (e) => { prefs.autostart = e.target.checked; savePrefs(); });
 if (bridge.getLoginItem && bridge.platform !== 'linux') {
-  bridge.getLoginItem().then((on) => { $('#opt-login').checked = !!on; });
+  bridge.getLoginItem().then((on) => {
+    if (on === null) { // Microsoft Store version
+      const l = $('#opt-login').closest('label');
+      l.querySelector('input').hidden = true;
+      l.querySelector('span').textContent = 'To open MicPRO when you sign in, turn it on in Windows Settings > Apps > Startup.';
+      return;
+    }
+    $('#opt-login').checked = !!on;
+  });
   $('#opt-login').addEventListener('change', (e) => bridge.setLoginItem(e.target.checked));
 } else {
   $('#opt-login').closest('label').hidden = true;

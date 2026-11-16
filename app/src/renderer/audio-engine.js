@@ -70,6 +70,13 @@ export class AudioEngine {
     if (this.running) await this.stop();
 
     this.ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
+    if (this.ctx.state === 'suspended') {
+      // started without a user gesture (auto-start): resume now, or on the first click / key press
+      this.ctx.resume().catch(() => {});
+      const ctx = this.ctx;
+      const wake = () => { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); };
+      for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, wake, { once: true, capture: true });
+    }
     await this.ctx.audioWorklet.addModule(new URL('./dsp/processors.js', import.meta.url));
     this._build();
     await this._acquire();

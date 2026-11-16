@@ -47,6 +47,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required', // processing starts at launch without a click
     },
   });
 
@@ -122,7 +123,8 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 ipcMain.handle('hotkeys:set', (_e, map) => registerHotkeys(map));
 ipcMain.handle('app:close-to-tray', (_e, v) => { closeToTray = !!v; });
 ipcMain.handle('app:version', () => app.getVersion());
-ipcMain.handle('app:login-item:get', () => app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin);
+// Store (MSIX) builds can't register login items; Windows manages their startup task instead.
+ipcMain.handle('app:login-item:get', () => (process.windowsStore ? null : app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin));
 ipcMain.handle('app:login-item:set', (_e, on) => {
   app.setLoginItemSettings({ openAtLogin: !!on, openAsHidden: true, args: ['--hidden'] });
   return app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin;

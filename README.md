@@ -53,6 +53,10 @@ npm run dist:win   # build an installer into app/dist
 
 Bump `version` in `app/package.json` and push to `main`. `.github/workflows/release.yml` builds Windows, macOS and Linux installers and publishes them as the matching `vX.Y.Z` GitHub release. You can also run it by hand from the Actions tab. The download buttons on the website point at `releases/latest`, so they update automatically.
 
+## Microsoft Store
+
+`STORE.md` walks through publishing the Store version. The **Build Microsoft Store package** workflow builds the `.appx` from your Partner Center identity.
+
 ## Website
 
 `index.html` at the repo root is the download page. Serve it with GitHub Pages (Settings → Pages → Deploy from branch → `main` / root).
