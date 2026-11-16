@@ -38,6 +38,16 @@ jobs:
           "-c.appx.publisherDisplayName=${{ inputs.publisher_display_name }}"
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Show package manifest
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $pkg = Get-ChildItem dist/*.appx | Select-Object -First 1
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($pkg.FullName)
+          $entry = $zip.Entries | Where-Object { $_.FullName -eq 'AppxManifest.xml' }
+          $reader = New-Object System.IO.StreamReader($entry.Open())
+          $reader.ReadToEnd()
+          $reader.Close(); $zip.Dispose()
       - uses: actions/upload-artifact@v4
         with:
           name: MicPRO-Store-package
