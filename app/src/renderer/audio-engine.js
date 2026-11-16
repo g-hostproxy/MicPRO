@@ -23,7 +23,10 @@ function autoMakeupDb(threshold, ratio) {
 }
 
 export class AudioEngine {
-  constructor() {
+  /** @param {{lane?: boolean}} opts  lane = headphone-monitor engine that plays straight to the monitor device */
+  constructor(opts = {}) {
+    this.isLane = !!opts.lane;
+    this.lane = null;
     this.ctx = null;
     this.stream = null;
     this.settings = normalize({});
@@ -71,17 +74,45 @@ export class AudioEngine {
     this._build();
     await this._acquire();
     await this.setOutputDevice(this.outputId);
-    await this._setupMonitor();
     this.running = true;
     this.apply(this.settings);
+    this._applyVoice();
+    this._applyRouting();
+    if (!this.isLane && this.monitorOn) await this._startLane();
     this.emit({ type: 'state' });
+  }
+
+  /*
+   * Headphone monitoring.
+   * Sending the processed stream to a second device through a media element adds a large
+   * playback buffer (often 50–100 ms) that makes you hear yourself late. Instead, a second
+   * engine ("lane") captures the same mic, runs the same chain and plays directly to the
+   * monitor device, so what you hear is only one capture + processing + output away.
+   */
+  async _startLane() {
+    if (this.isLane || this.lane?.running) return;
+    const lane = new AudioEngine({ lane: true });
+    Object.assign(lane, { bypass: this.bypass, muted: this.muted, monitorVolume: this.monitorVolume, voiceDsp: this.voiceDsp, monitorSafety: this.monitorSafety });
+    this.lane = lane;
+    try {
+      await lane.start({ inputId: this.inputId, outputId: this.monitorId, inputChannel: this.inputChannel, settings: this.settings });
+      if (this.lane !== lane) await lane.stop(); // monitor was switched off while starting
+    } catch (err) {
+      if (this.lane === lane) this.lane = null;
+      this.emit({ type: 'error', message: `Couldn't start headphone monitoring: ${err.message}` });
+    }
+  }
+
+  async _stopLane() {
+    const lane = this.lane; this.lane = null;
+    if (lane) await lane.stop();
   }
 
   async stop() {
     this.running = false;
+    await this._stopLane();
     if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
     this.stream = null;
-    if (this.monitorEl) { this.monitorEl.pause(); this.monitorEl.srcObject = null; }
     if (this.ctx) await this.ctx.close().catch(() => {});
     this.ctx = null;
     this.emit({ type: 'state' });
@@ -206,20 +237,22 @@ export class AudioEngine {
     this.chR.gain.setTargetAtTime(r, t, 0.01);
   }
 
-  setInputChannel(ch) { this.inputChannel = ch; this._applyChannel(); }
+  setInputChannel(ch) { this.inputChannel = ch; this._applyChannel(); this.lane?.setInputChannel(ch); }
 
   _applyRouting() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.processed.gain.setTargetAtTime(this.bypass ? 0 : 1, t, 0.015);
     this.bypassGain.gain.setTargetAtTime(this.bypass ? 1 : 0, t, 0.015);
-    this.muteGain.gain.setTargetAtTime(this.muted ? 0 : 1, t, 0.01);
-    this.monitorGain.gain.setTargetAtTime(this.monitorOn ? this.monitorVolume * this.monitorSafety : 0, t, 0.02);
+    const laneVol = this.isLane ? this.monitorVolume * this.monitorSafety : 1;
+    this.muteGain.gain.setTargetAtTime(this.muted ? 0 : laneVol, t, 0.01);
+    this.monitorGain.gain.setTargetAtTime(0, t, 0.02); // monitoring runs in its own lane
   }
 
   /** Voice changer parameters (see voices.js voiceDsp). Kept separate from the mic preset. */
   setVoice(dsp) {
     this.voiceDsp = dsp || {};
+    this.lane?.setVoice(this.voiceDsp);
     if (!this.voiceDsp.radio?.enabled) { this.tx = false; this.emit({ type: 'tx', tx: false }); }
     this.monitorSafety = this.voiceDsp.monitorSafety ?? 1;
     this._applyVoice();
@@ -274,13 +307,14 @@ export class AudioEngine {
     return buf;
   }
 
-  setBypass(on) { this.bypass = !!on; this._applyRouting(); this.emit({ type: 'state' }); }
-  setMute(on) { this.muted = !!on; this._applyRouting(); this.emit({ type: 'state' }); }
+  setBypass(on) { this.bypass = !!on; this.lane?.setBypass(on); this._applyRouting(); this.emit({ type: 'state' }); }
+  setMute(on) { this.muted = !!on; this.lane?.setMute(on); this._applyRouting(); this.emit({ type: 'state' }); }
   async setMonitor(on, volume) {
     this.monitorOn = !!on;
     if (typeof volume === 'number') this.monitorVolume = volume;
-    this._applyRouting();
-    if (this.monitorOn && this.monitorEl && this.monitorEl.paused) await this.monitorEl.play().catch(() => {});
+    if (this.lane) { this.lane.monitorVolume = this.monitorVolume; this.lane._applyRouting(); }
+    if (this.running && this.monitorOn) await this._startLane();
+    if (!this.monitorOn) await this._stopLane();
     this.emit({ type: 'state' });
   }
 
@@ -288,7 +322,8 @@ export class AudioEngine {
     this.outputId = id || '';
     if (!this.ctx || typeof this.ctx.setSinkId !== 'function') return;
     try {
-      await this.ctx.setSinkId(this.outputId ? this.outputId : { type: 'none' });
+      // the stream output may be 'nowhere'; the monitor lane always plays (default device when unset)
+      await this.ctx.setSinkId(this.outputId ? this.outputId : this.isLane ? '' : { type: 'none' });
     } catch (err) {
       this.emit({ type: 'error', message: `Couldn't switch the stream output: ${err.message}` });
     }
@@ -296,26 +331,19 @@ export class AudioEngine {
 
   async setMonitorDevice(id) {
     this.monitorId = id || '';
-    if (this.monitorEl && this.monitorEl.setSinkId) {
-      await this.monitorEl.setSinkId(this.monitorId || 'default').catch(() => {});
-    }
-  }
-
-  async _setupMonitor() {
-    if (!this.monitorEl) { this.monitorEl = new Audio(); this.monitorEl.autoplay = true; }
-    this.monitorEl.srcObject = this.monitorDest.stream;
-    await this.setMonitorDevice(this.monitorId);
-    await this.monitorEl.play().catch(() => {});
+    await this.lane?.setOutputDevice(this.monitorId);
   }
 
   async setInputDevice(id) {
     this.inputId = id;
     if (this.running) { await this._acquire(); this.emit({ type: 'state' }); }
+    await this.lane?.setInputDevice(id);
   }
 
   /** Push a full settings snapshot into the graph. Cheap enough to call on every knob move. */
   apply(settings) {
     this.settings = normalize(settings);
+    this.lane?.apply(this.settings);
     const s = this.settings;
     if (!this.ctx) return;
     const t = this.ctx.currentTime, k = 0.02;
@@ -364,8 +392,8 @@ export class AudioEngine {
     set(this.limiterComp.gain, dbToLin(-autoMakeupDb(lthr, lratio)));
   }
 
-  learnNoise(seconds = 2) { this.denoise?.port.postMessage({ learn: seconds }); }
-  clearNoiseProfile() { this.denoise?.port.postMessage({ clearProfile: true }); }
+  learnNoise(seconds = 2) { this.denoise?.port.postMessage({ learn: seconds }); this.lane?.learnNoise(seconds); }
+  clearNoiseProfile() { this.denoise?.port.postMessage({ clearProfile: true }); this.lane?.clearNoiseProfile(); }
 
   meters() {
     if (!this.ctx || !this.running || !this.anIn) return null;

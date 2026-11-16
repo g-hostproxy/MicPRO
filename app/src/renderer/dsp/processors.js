@@ -560,17 +560,17 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
     this.SIZE = 16384; this.M = this.SIZE - 1;
     this.inBuf = new Float32Array(this.SIZE); this.outBuf = new Float32Array(this.SIZE);
     this.inPos = 0; this.readPos = 0;
-    this.T0max = Math.round(sampleRate / 75);
+    this.T0max = Math.round(sampleRate / 80);
     this.ffMin = 0.7;
     this.HmaxOut = Math.ceil(this.T0max / this.ffMin);
-    this.L = this.HmaxOut + Math.ceil(this.T0max * 1.7) + 128; // ~36 ms at 48 kHz
+    this.L = this.HmaxOut + Math.ceil(this.T0max * 1.7) + 4; // ~39 ms at 48 kHz
     this.uvT = Math.round(0.006 * sampleRate);
     // decimated detector
     this.D = 4; this.dRate = sampleRate / this.D;
     this.dSize = 4096; this.dM = this.dSize - 1; this.dBuf = new Float32Array(this.dSize); this.dPos = 0;
     this.dAcc = 0; this.dN = 0; this.lp1 = 0; this.lp2 = 0;
     this.W = Math.round(0.02 * this.dRate);
-    this.minLag = Math.floor(this.dRate / 480); this.maxLag = Math.ceil(this.dRate / 75);
+    this.minLag = Math.floor(this.dRate / 480); this.maxLag = Math.ceil(this.dRate / 80);
     this.win = new Float32Array(this.W + this.maxLag + 2);
     this.d = new Float32Array(this.maxLag + 2);
     this.hist = new Float32Array(1024); // T0 per 128-sample block of input time

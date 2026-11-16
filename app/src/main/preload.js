@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('micpro', {
     return () => ipcRenderer.removeListener('hotkey', handler);
   },
   setCloseToTray: (v) => ipcRenderer.invoke('app:close-to-tray', v),
+  getLoginItem: () => ipcRenderer.invoke('app:login-item:get'),
+  setLoginItem: (on) => ipcRenderer.invoke('app:login-item:set', on),
   saveFile: (data, defaultName, filters) => ipcRenderer.invoke('file:save', { data, defaultName, filters }),
   openPresetFile: () => ipcRenderer.invoke('file:open-json'),
   openExternal: (url) => ipcRenderer.invoke('app:open-external', url),

@@ -326,3 +326,9 @@ input[type='range'] { accent-color: var(--amber); width: 100%; }
 }
 .voice-knobs { flex-wrap: nowrap; }
 .voice-knobs .knob { width: 64px; }
+
+/* ---------- remembered but unplugged devices ---------- */
+select.missing { color: var(--dim); font-style: italic; border-style: dashed; }
+select option { color: var(--bone); font-style: normal; background: var(--bg); }
+select option.missing { color: var(--dim); font-style: italic; }
+.field small.missing-hint { color: var(--amber); }

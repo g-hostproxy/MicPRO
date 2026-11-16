@@ -15,6 +15,8 @@ let win = null;
 let tray = null;
 let quitting = false;
 let closeToTray = true;
+// launched at sign-in: stay in the tray and just run
+const startHidden = process.argv.includes('--hidden') || (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -49,7 +51,7 @@ function createWindow() {
   });
 
   win.loadURL('app://micpro/index.html');
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { if (!startHidden) win.show(); });
 
   win.on('close', (e) => {
     if (!quitting && closeToTray && tray) {
@@ -120,6 +122,11 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 ipcMain.handle('hotkeys:set', (_e, map) => registerHotkeys(map));
 ipcMain.handle('app:close-to-tray', (_e, v) => { closeToTray = !!v; });
 ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('app:login-item:get', () => app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin);
+ipcMain.handle('app:login-item:set', (_e, on) => {
+  app.setLoginItemSettings({ openAtLogin: !!on, openAsHidden: true, args: ['--hidden'] });
+  return app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin;
+});
 ipcMain.handle('app:open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
 ipcMain.handle('file:save', async (_e, { data, defaultName, filters }) => {

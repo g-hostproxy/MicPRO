@@ -37,10 +37,13 @@ const store = {
 };
 
 const prefs = Object.assign(
-  { inputId: 'default', outputId: null, monitorId: '', inputChannel: 'mix', monitorOn: false, monitorVolume: 0.8,
-    hotkeys: {}, tray: true, autostart: false, seenHelp: false },
+  { inputId: 'default', inputLabel: '', outputId: null, outputLabel: '', monitorId: '', monitorLabel: '', inputChannel: 'mix',
+    monitorOn: false, monitorVolume: 0.8, hotkeys: {}, tray: true, autostart: true, seenHelp: false },
   store.get('prefs', {}),
 );
+// v1.3: processing now turns on at launch by default, including for existing installs
+if ((store.get('prefs', {}).prefsVersion || 1) < 2) prefs.autostart = true;
+prefs.prefsVersion = 2;
 prefs.hotkeys = { mute: 'CommandOrControl+Shift+M', bypass: 'CommandOrControl+Shift+B', voice: 'CommandOrControl+Alt+V', ...prefs.hotkeys };
 let userPresets = store.get('userPresets', []);
 let activePresetId = store.get('activePreset', 'sm7b');
@@ -356,34 +359,96 @@ $('#btn-import').addEventListener('click', async () => {
 /* ------------------------------------------------------------------ */
 const isVirtual = (label) => /cable input|vb-audio|voicemeeter|virtual|blackhole|loopback/i.test(label);
 
+/*
+ * Device memory. Each picker remembers its device by id and by name (ids can change when a
+ * device is re-plugged). A saved device that isn't connected stays selected but greyed out,
+ * MicPRO uses a fallback meanwhile, and switches back on its own when the device returns.
+ */
+let devCache = { inputs: [], outputs: [] };
+const SLOTS = {
+  input: { sel: '#sel-input', id: 'inputId', label: 'inputLabel', list: 'inputs', extra: [], fallback: 'default',
+    missing: 'Not connected. Using your default microphone until you plug it back in or pick another one.' },
+  output: { sel: '#sel-output', id: 'outputId', label: 'outputLabel', list: 'outputs', extra: [['', 'Nowhere (preview only)']], fallback: '',
+    missing: "Not connected. MicPRO isn't sending audio anywhere until it's back or you pick another output." },
+  monitor: { sel: '#sel-monitor', id: 'monitorId', label: 'monitorLabel', list: 'outputs', extra: [], fallback: 'default',
+    missing: 'Not connected. Listening on your default output for now.' },
+};
+const usable = (list) => devCache[list].filter((d) => d.deviceId !== 'communications');
+
+function resolveSlot(key) {
+  const c = SLOTS[key], devs = usable(c.list);
+  const id = key === 'monitor' && !prefs.monitorId ? 'default' : prefs[c.id];
+  if (id === '' || id === 'default' || id == null) return { id: id ?? c.fallback, present: true };
+  const d = devs.find((x) => x.deviceId === id) || (prefs[c.label] && devs.find((x) => x.label === prefs[c.label]));
+  if (d) { prefs[c.id] = d.deviceId; if (d.label) prefs[c.label] = d.label; return { id: d.deviceId, present: true }; }
+  if (!devs.some((x) => x.label)) return { id, present: true }; // names not readable yet: can't tell
+  return { id: c.fallback, present: false };
+}
+
+function fillSlot(key) {
+  const c = SLOTS[key], sel = $(c.sel), r = resolveSlot(key);
+  sel.innerHTML = '';
+  if (!r.present) {
+    const o = new Option(`${prefs[c.label] || 'Saved device'} (not connected)`, prefs[c.id]);
+    o.disabled = true; o.className = 'missing'; sel.add(o);
+  }
+  for (const [v, t] of c.extra) sel.add(new Option(t, v));
+  usable(c.list).forEach((d, i) => sel.add(new Option(d.label || `Device ${i + 1}`, d.deviceId)));
+  const want = r.present ? r.id : prefs[c.id];
+  sel.value = [...sel.options].some((o) => o.value === want) ? want : sel.options[0]?.value ?? '';
+  sel.classList.toggle('missing', !r.present);
+  const hint = $(`#${key}-missing`);
+  hint.hidden = r.present; hint.textContent = c.missing;
+  return r;
+}
+
+/** The devices audio should actually use right now (fallbacks for anything unplugged). */
+function liveDevices() {
+  const i = resolveSlot('input'), o = resolveSlot('output'), m = resolveSlot('monitor');
+  return { input: i.id, output: o.id, monitor: m.id === 'default' ? '' : m.id, missing: { input: !i.present, output: !o.present, monitor: !m.present } };
+}
+
 async function refreshDevices() {
-  let { inputs, outputs } = await AudioEngine.listDevices();
-  const fill = (sel, devs, extra, current) => {
-    sel.innerHTML = '';
-    for (const [v, t] of extra) sel.add(new Option(t, v));
-    devs.forEach((d, i) => sel.add(new Option(d.label || `Device ${i + 1}`, d.deviceId)));
-    sel.value = [...sel.options].some((o) => o.value === current) ? current : sel.options[0]?.value ?? '';
-  };
+  const { inputs, outputs } = await AudioEngine.listDevices();
+  devCache = { inputs, outputs };
   if (prefs.outputId == null) {
     const cable = outputs.find((d) => /cable input/i.test(d.label)) || outputs.find((d) => isVirtual(d.label));
-    prefs.outputId = cable ? cable.deviceId : '';
+    prefs.outputId = cable ? cable.deviceId : ''; prefs.outputLabel = cable ? cable.label : '';
   }
-  fill($('#sel-input'), inputs.filter((d) => d.deviceId !== 'communications'), [], prefs.inputId);
-  fill($('#sel-output'), outputs.filter((d) => d.deviceId !== 'communications'), [['', 'Nowhere (preview only)']], prefs.outputId);
-  fill($('#sel-monitor'), outputs.filter((d) => d.deviceId !== 'communications'), [], prefs.monitorId || 'default');
+  const before = refreshDevices.lastMissing || {};
+  const missing = { input: !fillSlot('input').present, output: !fillSlot('output').present, monitor: !fillSlot('monitor').present };
+  refreshDevices.lastMissing = missing;
+  savePrefs();
   const hasVirtual = outputs.some((d) => isVirtual(d.label));
   $('#output-hint').textContent = hasVirtual
     ? 'Then pick the matching cable output as your mic in OBS or Discord.'
     : 'No virtual cable found. Install VB-CABLE so OBS and Discord can hear MicPRO.';
+  // follow plug / unplug while running
+  if (engine.running) {
+    const live = liveDevices();
+    if (engine.inputId !== live.input) await engine.setInputDevice(live.input).catch((err) => toast(`Couldn't open the microphone: ${err.message}`, true));
+    if (engine.outputId !== live.output) await engine.setOutputDevice(live.output);
+    if (engine.monitorId !== live.monitor) await engine.setMonitorDevice(live.monitor);
+  }
+  for (const k of Object.keys(missing)) {
+    if (before[k] && !missing[k]) toast(`${prefs[SLOTS[k].label] || 'Your device'} is back. MicPRO switched to it.`);
+    if (before[k] === false && missing[k]) toast(`${prefs[SLOTS[k].label] || 'A device'} was unplugged.`, true);
+  }
 }
 navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
 
+function pickDevice(key, value) {
+  const c = SLOTS[key], d = usable(c.list).find((x) => x.deviceId === value);
+  prefs[c.id] = value; prefs[c.label] = d && value !== 'default' ? d.label : '';
+  savePrefs(); fillSlot(key);
+  refreshDevices.lastMissing = { ...(refreshDevices.lastMissing || {}), [key]: false };
+}
 $('#sel-input').addEventListener('change', async (e) => {
-  prefs.inputId = e.target.value; savePrefs();
-  try { await engine.setInputDevice(prefs.inputId); } catch (err) { toast(`Couldn't open that microphone: ${err.message}`, true); }
+  pickDevice('input', e.target.value);
+  try { await engine.setInputDevice(liveDevices().input); } catch (err) { toast(`Couldn't open that microphone: ${err.message}`, true); }
 });
-$('#sel-output').addEventListener('change', async (e) => { prefs.outputId = e.target.value; savePrefs(); await engine.setOutputDevice(prefs.outputId); });
-$('#sel-monitor').addEventListener('change', async (e) => { prefs.monitorId = e.target.value; savePrefs(); await engine.setMonitorDevice(prefs.monitorId); });
+$('#sel-output').addEventListener('change', async (e) => { pickDevice('output', e.target.value); await engine.setOutputDevice(liveDevices().output); });
+$('#sel-monitor').addEventListener('change', async (e) => { pickDevice('monitor', e.target.value === 'default' ? '' : e.target.value); await engine.setMonitorDevice(liveDevices().monitor); });
 $('#monitor-vol').value = Math.round(prefs.monitorVolume * 100);
 $('#monitor-vol').addEventListener('input', (e) => { prefs.monitorVolume = e.target.value / 100; savePrefs(); engine.setMonitor(prefs.monitorOn, prefs.monitorVolume); });
 $('#sw-monitor').addEventListener('click', () => { prefs.monitorOn = !prefs.monitorOn; savePrefs(); engine.setMonitor(prefs.monitorOn, prefs.monitorVolume); renderTransport(); });
@@ -410,9 +475,10 @@ function renderTransport() {
 
 async function powerOn() {
   try {
-    await engine.start({ inputId: prefs.inputId, outputId: prefs.outputId || '', monitorId: prefs.monitorId, inputChannel: prefs.inputChannel, settings });
-    await engine.setMonitor(prefs.monitorOn, prefs.monitorVolume);
-    await refreshDevices();
+    await refreshDevices().catch(() => {});
+    const live = liveDevices();
+    engine.monitorOn = prefs.monitorOn; engine.monitorVolume = prefs.monitorVolume;
+    await engine.start({ inputId: live.input, outputId: live.output, monitorId: live.monitor, inputChannel: prefs.inputChannel, settings });
   } catch (err) {
     toast(err.name === 'NotAllowedError' ? 'Microphone access was blocked. Allow it in your system privacy settings.' : `Couldn't start: ${err.message}`, true, 6000);
   }
@@ -525,6 +591,12 @@ $('#opt-tray').checked = prefs.tray;
 $('#opt-tray').addEventListener('change', (e) => { prefs.tray = e.target.checked; savePrefs(); bridge.setCloseToTray(prefs.tray); });
 $('#opt-autostart').checked = prefs.autostart;
 $('#opt-autostart').addEventListener('change', (e) => { prefs.autostart = e.target.checked; savePrefs(); });
+if (bridge.getLoginItem && bridge.platform !== 'linux') {
+  bridge.getLoginItem().then((on) => { $('#opt-login').checked = !!on; });
+  $('#opt-login').addEventListener('change', (e) => bridge.setLoginItem(e.target.checked));
+} else {
+  $('#opt-login').closest('label').hidden = true;
+}
 $('#btn-settings').addEventListener('click', () => $('#dlg-settings').showModal());
 $('#btn-help').addEventListener('click', () => $('#dlg-help').showModal());
 $$('a[data-external]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); bridge.openExternal(a.href); }));
@@ -727,7 +799,6 @@ function renderFrame() {
     s.getTracks().forEach((t) => t.stop());
   } catch { /* handled when the user presses power */ }
   await refreshDevices().catch(() => {});
-  savePrefs();
   requestAnimationFrame(frame);
   if (!prefs.seenHelp) { prefs.seenHelp = true; savePrefs(); $('#dlg-help').showModal(); }
   if (prefs.autostart) powerOn();

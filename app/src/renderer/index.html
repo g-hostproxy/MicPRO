@@ -44,6 +44,7 @@
         <label class="field">
           <span>Microphone</span>
           <select id="sel-input"></select>
+          <small class="missing-hint" id="input-missing" hidden></small>
         </label>
         <div class="field">
           <span>Mic channel</span>
@@ -57,6 +58,7 @@
         <label class="field">
           <span>Send clean audio to</span>
           <select id="sel-output"></select>
+          <small class="missing-hint" id="output-missing" hidden></small>
           <small id="output-hint">Choose a virtual cable, then select its output as your mic in OBS or Discord.</small>
         </label>
         <div class="field">
@@ -65,6 +67,7 @@
             <button class="switch" id="sw-monitor" role="switch" aria-checked="false" aria-label="Listen in headphones"><i></i></button>
           </span>
           <select id="sel-monitor"></select>
+          <small class="missing-hint" id="monitor-missing" hidden></small>
           <input type="range" id="monitor-vol" min="0" max="100" value="80" aria-label="Listen volume" />
         </div>
       </section>
@@ -252,6 +255,7 @@
       <label class="field"><span>Voice changer on/off hotkey</span><input id="hk-voice" class="hotkey" readonly /></label>
       <label class="check"><input type="checkbox" id="opt-tray" /><span>Keep running in the tray when the window is closed</span></label>
       <label class="check"><input type="checkbox" id="opt-autostart" /><span>Turn processing on when MicPRO opens</span></label>
+      <label class="check"><input type="checkbox" id="opt-login" /><span>Open MicPRO when I sign in (starts in the tray)</span></label>
       <p class="muted" id="about"></p>
       <div class="dlg-actions"><button class="btn" value="close">Done</button></div>
     </form>

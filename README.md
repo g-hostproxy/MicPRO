@@ -22,7 +22,8 @@ Real-time microphone enhancement for streamers and video creators. MicPRO sits b
 - **Auto-set gain**: talk for five seconds and MicPRO sets your input level.
 - **Record test**: record raw and processed side by side, A/B them, save 24-bit WAVs for your edits.
 - **Global hotkeys** for mute and bypass, tray mode, headphone monitoring.
-- About 20 ms total latency. Everything runs locally.
+- About 20 ms total latency, including headphone monitoring (a dedicated monitor engine plays straight to your headphones). Everything runs locally.
+- Turns on when it opens, can open at sign-in, and remembers your mic and outputs. An unplugged device stays selected (greyed out) and MicPRO switches back when it returns.
 
 ## Using it
 
